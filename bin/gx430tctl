@@ -42,7 +42,10 @@ case "$CMD" in
     lpstat -p GX430t_shared -l 2>/dev/null || true
     ;;
   discover)
+    echo "=== CUPS USB DISCOVERY ==="
     lpinfo -v | grep -i "zebra\|gx430\|ztc" || true
+    echo "=== SYSTEM USB DISCOVERY ==="
+    system_profiler SPUSBDataType 2>/dev/null | grep -i -A 12 -B 4 "zebra\|gx430\|ztc" || true
     ;;
   install-local)
     bash "$ROOT/install/install-macos-cups.sh"
@@ -76,8 +79,10 @@ case "$CMD" in
     lpstat -p GX430t -l || true
     echo "--- GX430T SHARED ---"
     lpstat -p GX430t_shared -l || true
-    echo "--- USB ZEBRA ---"
+    echo "--- CUPS USB ZEBRA ---"
     lpinfo -v | grep -i "zebra\|gx430\|ztc" || true
+    echo "--- SYSTEM USB ZEBRA ---"
+    system_profiler SPUSBDataType 2>/dev/null | grep -i -A 12 -B 4 "zebra\|gx430\|ztc" || true
     echo "--- HOST IP ---"
     ipconfig getifaddr en1 || ipconfig getifaddr en0 || true
     ;;
