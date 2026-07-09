@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "GX430T_PREINSTALL_OK=true"
+exit 0

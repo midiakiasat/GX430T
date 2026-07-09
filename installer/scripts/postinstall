@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+chmod +x /usr/local/gx430t/bin/gx430tctl || true
+chmod +x /usr/local/gx430t/scripts/*.sh || true
+chmod +x /usr/local/gx430t/install/*.sh || true
+
+ln -sf /usr/local/gx430t/bin/gx430tctl /usr/local/bin/gx430tctl
+
+echo "GX430T_POSTINSTALL_DONE=true"
+exit 0
