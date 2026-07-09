@@ -14,4 +14,6 @@ grep -q "\\^B3N" scripts/print-code39.sh
 grep -q "\\^BQN" scripts/print-qr.sh
 grep -q "printer-is-shared=true" install/enable-host-sharing.sh
 grep -q "GX430t_shared" install/install-client-shared-printer.sh
+test -x bin/gx430tctl
+grep -q "print-code128" bin/gx430tctl
 echo "GX430T_CONTROL_VERIFY_PASS=true"

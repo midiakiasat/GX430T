@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CMD="${1:-}"
+
+usage() {
+  cat <<USAGE
+gx430tctl status
+gx430tctl discover
+gx430tctl install-local
+gx430tctl install-client <host-ip>
+gx430tctl share-on
+gx430tctl print-code128 <value> [copies]
+gx430tctl print-code39 <value> [copies]
+gx430tctl print-qr <value> [copies]
+gx430tctl diagnose
+gx430tctl verify
+USAGE
+}
+
+case "$CMD" in
+  status)
+    lpstat -p GX430t -l 2>/dev/null || true
+    lpstat -p GX430t_shared -l 2>/dev/null || true
+    ;;
+  discover)
+    lpinfo -v | grep -i "zebra\\|gx430\\|ztc" || true
+    ;;
+  install-local)
+    bash "$ROOT/install/install-macos-cups.sh"
+    ;;
+  install-client)
+    shift
+    bash "$ROOT/install/install-client-shared-printer.sh" "${1:-}"
+    ;;
+  share-on)
+    bash "$ROOT/install/enable-host-sharing.sh"
+    ;;
+  print-code128)
+    shift
+    bash "$ROOT/scripts/print-code128.sh" "${1:-}" "${2:-1}"
+    ;;
+  print-code39)
+    shift
+    bash "$ROOT/scripts/print-code39.sh" "${1:-}" "${2:-1}"
+    ;;
+  print-qr)
+    shift
+    bash "$ROOT/scripts/print-qr.sh" "${1:-}" "${2:-1}"
+    ;;
+  diagnose)
+    echo "=== GX430T DIAGNOSE ==="
+    sw_vers || true
+    echo "--- PRINTERS ---"
+    lpstat -v || true
+    echo "--- GX430T LOCAL ---"
+    lpstat -p GX430t -l || true
+    echo "--- GX430T SHARED ---"
+    lpstat -p GX430t_shared -l || true
+    echo "--- USB ZEBRA ---"
+    lpinfo -v | grep -i "zebra\\|gx430\\|ztc" || true
+    echo "--- HOST IP ---"
+    ipconfig getifaddr en1 || ipconfig getifaddr en0 || true
+    ;;
+  verify)
+    bash "$ROOT/scripts/verify-gx430t-control.sh"
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    echo "unknown command: $CMD" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
