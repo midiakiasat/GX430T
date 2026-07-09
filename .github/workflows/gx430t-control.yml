@@ -1,0 +1,13 @@
+name: gx430t-control
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify GX430T control foundation
+        run: bash scripts/verify-gx430t-control.sh

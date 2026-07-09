@@ -1,0 +1,14 @@
+{
+  "schema": "gx430t.profile.scanner_safe_code128.v1",
+  "printer": "Zebra GX430t",
+  "command_set": "ZPL",
+  "symbology": "CODE_128",
+  "printer_width": 812,
+  "label_length": 600,
+  "print_rate": 2,
+  "darkness": 20,
+  "module_width": 4,
+  "height": 230,
+  "transport": "lpr -P GX430t -l",
+  "status": "SCANNER_SAFE_BASELINE"
+}
