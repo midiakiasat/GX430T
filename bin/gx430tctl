@@ -128,8 +128,27 @@ case "$CMD" in
     bash "$ROOT/install/install-host-service.sh"
     ;;
   host-status)
-    curl --fail --silent --show-error http://127.0.0.1:43043/v1/status
+    RESPONSE_FILE="$(mktemp)"
+    HTTP_STATUS="$(
+      curl         --silent         --show-error         --output "$RESPONSE_FILE"         --write-out '%{http_code}'         http://127.0.0.1:43043/v1/status
+    )"
+
+    cat "$RESPONSE_FILE"
     echo
+    rm -f "$RESPONSE_FILE"
+
+    if [[ "$HTTP_STATUS" = "200" ]]; then
+      echo "GX430T_HOST_PRINTER_STATUS=ONLINE"
+      exit 0
+    fi
+
+    if [[ "$HTTP_STATUS" = "503" ]]; then
+      echo "GX430T_HOST_PRINTER_STATUS=OFFLINE"
+      exit 1
+    fi
+
+    echo "GX430T_HOST_STATUS_HTTP=$HTTP_STATUS"
+    exit 1
     ;;
   host-info)
     CONFIG="$HOME/Library/Application Support/GX430T/host.json"
