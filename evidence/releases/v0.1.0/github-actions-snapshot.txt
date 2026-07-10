@@ -1,0 +1,5 @@
+completed	success	Add GX430T colleague client install kit	gx430t-control	v0.1.0	push	29090709356	10s	2026-07-10T11:51:17Z
+completed	success	Add GX430T colleague client install kit	gx430t-control	main	push	29090654206	9s	2026-07-10T11:50:14Z
+completed	success	Record GX430T live host sharing baseline	gx430t-control	main	push	29090630216	9s	2026-07-10T11:49:46Z
+completed	success	Harden GX430T USB discovery and local install guard	gx430t-control	main	push	29049144416	10s	2026-07-09T20:47:48Z
+completed	success	Repair installed GX430T CLI root resolution	gx430t-control	main	push	29049091382	7s	2026-07-09T20:46:52Z
