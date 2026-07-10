@@ -344,6 +344,22 @@ struct QuickPrintView: View {
             }
         }
         .frame(minWidth: 920, minHeight: 650)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    model.refreshStatus()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+
+                Button {
+                    model.printCurrent()
+                } label: {
+                    Label("Print", systemImage: "printer.fill")
+                }
+                .disabled(!model.canPrint)
+            }
+        }
     }
 
     private var quickPrint: some View {
@@ -492,41 +508,200 @@ struct HistoryView: View {
 
 struct MenuBarContent: View {
     @EnvironmentObject private var model: GX430TModel
+    @FocusState private var inputFocused: Bool
+
+    private var statusColor: Color {
+        model.printerOnline ? .green : .orange
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(model.printerStatus, systemImage: model.printerOnline ? "printer.fill" : "printer")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(statusColor.opacity(0.14))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: model.printerOnline ? "printer.fill" : "printer")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GX430T")
+                        .font(.system(size: 18, weight: .bold))
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 7, height: 7)
+
+                        Text(model.printerStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    model.refreshStatus()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh printer status")
+            }
 
             Divider()
 
-            Button("Open GX430T") {
-                model.openMainWindow()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Quick Print")
+                    .font(.headline)
+
+                TextField("Type what you want to print", text: $model.value, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .focused($inputFocused)
+                    .onSubmit {
+                        if model.canPrint {
+                            model.printCurrent()
+                        }
+                    }
+
+                Picker("Format", selection: $model.kind) {
+                    ForEach(PrintKind.allCases) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                HStack {
+                    Stepper(value: $model.copies, in: 1...999) {
+                        Text("\(model.copies) \(model.copies == 1 ? "copy" : "copies")")
+                            .font(.callout)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        model.printCurrent()
+                    } label: {
+                        HStack(spacing: 7) {
+                            if model.isPrinting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "printer.fill")
+                            }
+
+                            Text(model.isPrinting ? "Printing…" : "Print")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(minWidth: 86)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(!model.canPrint)
+                }
             }
 
-            Button("Print Test Label") {
-                model.printTest()
+            if !model.message.isEmpty {
+                HStack(alignment: .top, spacing: 7) {
+                    Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
+                        .foregroundStyle(model.printerOnline ? .green : .secondary)
+
+                    Text(model.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(.quaternary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
             }
 
-            Button("Refresh Status") {
-                model.refreshStatus()
+            if !model.history.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Recent")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+                    }
+
+                    ForEach(Array(model.history.prefix(3))) { item in
+                        Button {
+                            model.useHistory(item)
+                            inputFocused = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: item.kind.symbol)
+                                    .frame(width: 17)
+                                    .foregroundStyle(.secondary)
+
+                                Text(item.value)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Text("×\(item.copies)")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
 
             Divider()
 
-            Text(model.message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
+            HStack {
+                Button {
+                    model.openMainWindow()
+                } label: {
+                    Label("Open App", systemImage: "macwindow")
+                }
 
-            Divider()
+                Spacer()
 
-            Button("Quit GX430T") {
-                NSApp.terminate(nil)
+                Menu {
+                    Button("Print Test Label") {
+                        model.printTest()
+                    }
+
+                    Button("Refresh Status") {
+                        model.refreshStatus()
+                    }
+
+                    Divider()
+
+                    Button("Quit GX430T", role: .destructive) {
+                        NSApp.terminate(nil)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
         }
-        .padding(10)
-        .frame(width: 250)
+        .padding(16)
+        .frame(width: 390)
+        .onAppear {
+            model.refreshStatus()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                inputFocused = true
+            }
+        }
     }
 }
 
@@ -548,5 +723,6 @@ struct GX430TMacControlApp: App {
         } label: {
             Image(systemName: model.printerOnline ? "printer.fill" : "printer")
         }
+        .menuBarExtraStyle(.window)
     }
 }
