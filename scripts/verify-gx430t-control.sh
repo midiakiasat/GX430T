@@ -43,3 +43,9 @@ test -f branding/ZEBRAGX430TLOGO.svg
 test -f app/GX430TMacControl/Resources/ZEBRAGX430TLOGO.svg
 test -f ios/GX430TiPhone/Resources/ZEBRAGX430TLOGO.svg
 grep -q '<svg' branding/ZEBRAGX430TLOGO.svg
+
+test -x install/install-app-autostart.sh
+test -x install/remove-app-autostart.sh
+grep -q "app-autostart-on" bin/gx430tctl
+grep -q "host-restart" bin/gx430tctl
+test -f docs/APP_LIFECYCLE.md

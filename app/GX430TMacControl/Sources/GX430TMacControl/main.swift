@@ -239,6 +239,43 @@ final class GX430TModel: ObservableObject {
         }
     }
 
+    func enableAppAutostart() {
+        execute(arguments: ["app-autostart-on"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code != 0 {
+                NSSound.beep()
+            }
+        }
+    }
+
+    func disableAppAutostart() {
+        execute(arguments: ["app-autostart-off"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code != 0 {
+                NSSound.beep()
+            }
+        }
+    }
+
+    func restartPrintHost() {
+        execute(arguments: ["host-restart"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code == 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    self.refreshStatus()
+                }
+            } else {
+                NSSound.beep()
+            }
+        }
+    }
+
     func removeClientPairing() {
         execute(arguments: ["client-remove"]) { [weak self] _, output in
             guard let self else { return }
@@ -728,6 +765,22 @@ struct ConnectionView: View {
 
                 Text("Other Macs and iPhones can pair with this Mac and send secure print jobs over the local network.")
                     .foregroundStyle(.secondary)
+
+                HStack {
+                    Button {
+                        model.enableAppAutostart()
+                    } label: {
+                        Label("Launch at Login", systemImage: "power")
+                    }
+
+                    Button {
+                        model.restartPrintHost()
+                    } label: {
+                        Label("Restart Print Host", systemImage: "arrow.clockwise")
+                    }
+
+                    Spacer()
+                }
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Pair with the work Mac")
@@ -973,6 +1026,16 @@ struct MenuBarContent: View {
 
                     Button("Refresh Status") {
                         model.refreshStatus()
+                    }
+
+                    Button("Launch at Login") {
+                        model.enableAppAutostart()
+                    }
+
+                    if model.connectionMode == .local {
+                        Button("Restart Print Host") {
+                            model.restartPrintHost()
+                        }
                     }
 
                     Divider()
