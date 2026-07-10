@@ -1,0 +1,18 @@
+{
+  "schema": "gx430t.release_finality_audit.v1",
+  "product": "GX430T Mac Control",
+  "repository": "midiakiasat/GX430T",
+  "version": "0.1.0",
+  "tag": "v0.1.0",
+  "head_sha": "65eb65a9347452cdb9be4231662d6b4a503d8982",
+  "tag_commit_sha": "65eb65a9347452cdb9be4231662d6b4a503d8982",
+  "release_tag": "v0.1.0",
+  "package_sha256": "0cb5707da946a66f5ab9c6fb6608030d5af465f988cab8f13f9004a3ceb4e6bf",
+  "github_asset_digest": "sha256:0cb5707da946a66f5ab9c6fb6608030d5af465f988cab8f13f9004a3ceb4e6bf",
+  "integrity_record_sha256": "0cb5707da946a66f5ab9c6fb6608030d5af465f988cab8f13f9004a3ceb4e6bf",
+  "local_queue": "GX430t",
+  "host_ipp_endpoint": "ipp://192.168.0.55/printers/GX430t",
+  "client_queue": "GX430t_shared",
+  "finality": "HEAD_TAG_RELEASE_ASSET_RECORD_ALIGNED",
+  "timestamp_utc": "2026-07-10T11:53:33Z"
+}
