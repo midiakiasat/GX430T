@@ -22,3 +22,10 @@ echo "GX430T_CONTROL_VERIFY_PASS=true"
 
 test -x scripts/print-text.sh
 grep -q "print-text" bin/gx430tctl
+
+test -x host-service/gx430t_host.py
+test -x host-service/run-host.sh
+test -x install/install-host-service.sh
+test -x install/remove-host-service.sh
+grep -q "host-install" bin/gx430tctl
+grep -q "/v1/print" host-service/gx430t_host.py

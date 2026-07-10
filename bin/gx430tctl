@@ -32,6 +32,10 @@ gx430tctl print-text <value> [copies]
 gx430tctl print-code128 <value> [copies]
 gx430tctl print-code39 <value> [copies]
 gx430tctl print-qr <value> [copies]
+gx430tctl host-install
+gx430tctl host-status
+gx430tctl host-info
+gx430tctl host-remove
 gx430tctl diagnose
 gx430tctl verify
 USAGE
@@ -103,6 +107,35 @@ case "$CMD" in
   print-qr)
     shift
     bash "$ROOT/scripts/print-qr.sh" "${1:-}" "${2:-1}"
+    ;;
+  host-install)
+    bash "$ROOT/install/install-host-service.sh"
+    ;;
+  host-status)
+    curl --fail --silent --show-error http://127.0.0.1:43043/v1/status
+    echo
+    ;;
+  host-info)
+    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
+    HOST_IP="$(ipconfig getifaddr en1 || ipconfig getifaddr en0 || true)"
+    test -f "$CONFIG"
+    python3 - "$CONFIG" "$HOST_IP" <<'PY_HOST_INFO'
+import json
+import sys
+
+config = json.load(open(sys.argv[1]))
+host_ip = sys.argv[2]
+
+print(f"GX430T_HOST_NAME={config.get('hostName', 'GX430T Host')}")
+print(f"GX430T_HOST_IP={host_ip}")
+print(f"GX430T_HOST_PORT={config.get('port', 43043)}")
+print(f"GX430T_HOST_URL=http://{host_ip}:{config.get('port', 43043)}")
+print(f"GX430T_HOST_TOKEN={config.get('token', '')}")
+print(f"GX430T_HOST_PROTOCOL={config.get('protocol', 1)}")
+PY_HOST_INFO
+    ;;
+  host-remove)
+    bash "$ROOT/install/remove-host-service.sh"
     ;;
   diagnose)
     echo "=== GX430T DIAGNOSE ==="
