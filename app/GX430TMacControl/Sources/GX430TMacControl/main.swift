@@ -65,8 +65,22 @@ final class GX430TModel: ObservableObject {
     func refreshStatus() {
         execute(arguments: ["status"]) { [weak self] code, output in
             guard let self else { return }
-            self.printerOnline = code == 0 && output.localizedCaseInsensitiveContains("idle")
-            self.printerStatus = self.printerOnline ? "GX430t Online" : "GX430t Unavailable"
+            let online = output.contains("GX430T_STATUS=ONLINE")
+            let printing = output.contains("GX430T_STATUS=PRINTING")
+
+            self.printerOnline = code == 0 && (online || printing)
+
+            if printing {
+                self.printerStatus = "GX430t Printing"
+            } else if online {
+                self.printerStatus = "GX430t Online"
+            } else if output.contains("GX430T_STATUS=OFFLINE") {
+                self.printerStatus = "GX430t Offline"
+            } else if output.contains("GX430T_STATUS=NOT_CONFIGURED") {
+                self.printerStatus = "GX430t Not Configured"
+            } else {
+                self.printerStatus = "GX430t Unavailable"
+            }
             if !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
             }

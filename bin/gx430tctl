@@ -39,8 +39,38 @@ USAGE
 
 case "$CMD" in
   status)
-    lpstat -p GX430t -l 2>/dev/null || true
-    lpstat -p GX430t_shared -l 2>/dev/null || true
+    LOCAL_STATUS="$(lpstat -p GX430t -l 2>&1 || true)"
+    QUEUE_JOBS="$(lpstat -o GX430t 2>/dev/null || true)"
+
+    if [[ "$LOCAL_STATUS" == *"Invalid destination"* ]] || [[ "$LOCAL_STATUS" == *"Unknown destination"* ]]; then
+      echo "GX430T_STATUS=NOT_CONFIGURED"
+      echo "$LOCAL_STATUS"
+      exit 2
+    fi
+
+    if [[ "$LOCAL_STATUS" =~ [Oo]ffline|[Dd]isabled|not\ accepting ]]; then
+      echo "GX430T_STATUS=OFFLINE"
+      echo "$LOCAL_STATUS"
+      [[ -n "$QUEUE_JOBS" ]] && echo "$QUEUE_JOBS"
+      exit 1
+    fi
+
+    if [[ "$LOCAL_STATUS" =~ printing ]] || [[ -n "$QUEUE_JOBS" ]]; then
+      echo "GX430T_STATUS=PRINTING"
+      echo "$LOCAL_STATUS"
+      [[ -n "$QUEUE_JOBS" ]] && echo "$QUEUE_JOBS"
+      exit 0
+    fi
+
+    if [[ "$LOCAL_STATUS" =~ idle ]]; then
+      echo "GX430T_STATUS=ONLINE"
+      echo "$LOCAL_STATUS"
+      exit 0
+    fi
+
+    echo "GX430T_STATUS=UNKNOWN"
+    echo "$LOCAL_STATUS"
+    exit 1
     ;;
   discover)
     echo "=== CUPS USB DISCOVERY ==="
