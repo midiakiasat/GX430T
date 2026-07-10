@@ -28,6 +28,7 @@ gx430tctl discover
 gx430tctl install-local
 gx430tctl install-client <host-ip>
 gx430tctl share-on
+gx430tctl print-text <value> [copies]
 gx430tctl print-code128 <value> [copies]
 gx430tctl print-code39 <value> [copies]
 gx430tctl print-qr <value> [copies]
@@ -56,6 +57,10 @@ case "$CMD" in
     ;;
   share-on)
     bash "$ROOT/install/enable-host-sharing.sh"
+    ;;
+  print-text)
+    shift
+    bash "$ROOT/scripts/print-text.sh" "${1:-}" "${2:-1}"
     ;;
   print-code128)
     shift

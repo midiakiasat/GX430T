@@ -19,3 +19,6 @@ test -x installer/build-pkg.sh
 test -x installer/scripts/postinstall
 grep -q "print-code128" bin/gx430tctl
 echo "GX430T_CONTROL_VERIFY_PASS=true"
+
+test -x scripts/print-text.sh
+grep -q "print-text" bin/gx430tctl

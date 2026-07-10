@@ -11,7 +11,14 @@ RESOURCES="$CONTENTS/Resources"
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES"
 
-swiftc "$ROOT/Sources/GX430TMacControl/main.swift" \
+SOURCES=()
+while IFS= read -r SOURCE; do
+  SOURCES+=("$SOURCE")
+done < <(find "$ROOT/Sources" -type f -name '*.swift' -print | sort)
+
+test "${#SOURCES[@]}" -gt 0
+
+swiftc "${SOURCES[@]}" \
   -parse-as-library \
   -o "$MACOS/GX430TMacControl" \
   -framework SwiftUI \
