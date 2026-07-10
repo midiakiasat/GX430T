@@ -331,6 +331,42 @@ final class GX430TModel: ObservableObject {
     }
 }
 
+struct GX430TBrandMark: View {
+    var size: CGFloat = 48
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: "printer.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.18)
+            }
+        }
+        .frame(width: size, height: size)
+        .foregroundStyle(.primary)
+        .onAppear {
+            guard
+                let url = Bundle.main.url(
+                    forResource: "ZEBRAGX430TLOGO",
+                    withExtension: "svg"
+                ),
+                let loaded = NSImage(contentsOf: url)
+            else {
+                return
+            }
+
+            image = loaded
+        }
+    }
+}
+
 struct LabelPreview: View {
     let value: String
     let kind: PrintKind
@@ -419,12 +455,19 @@ struct QuickPrintView: View {
     var body: some View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("GX430T")
-                        .font(.system(size: 30, weight: .bold))
+                HStack(spacing: 12) {
+                    GX430TBrandMark(size: 54)
 
-                    Label(model.printerStatus, systemImage: model.printerOnline ? "printer.fill" : "printer")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("GX430T")
+                            .font(.system(size: 30, weight: .bold))
+
+                        Label(
+                            model.printerStatus,
+                            systemImage: model.printerOnline ? "printer.fill" : "printer"
+                        )
                         .foregroundStyle(model.printerOnline ? .green : .secondary)
+                    }
                 }
 
                 Divider()
@@ -759,10 +802,9 @@ struct MenuBarContent: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(statusColor.opacity(0.14))
-                        .frame(width: 42, height: 42)
+                        .frame(width: 46, height: 46)
 
-                    Image(systemName: model.printerOnline ? "printer.fill" : "printer")
-                        .font(.system(size: 19, weight: .semibold))
+                    GX430TBrandMark(size: 38)
                         .foregroundStyle(statusColor)
                 }
 

@@ -27,5 +27,12 @@ swiftc "${SOURCES[@]}" \
 chmod 755 "$MACOS/GX430TMacControl"
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 
+rsync -a \
+  --exclude "Info.plist" \
+  "$ROOT/Resources/" \
+  "$RESOURCES/"
+
+test -f "$RESOURCES/ZEBRAGX430TLOGO.svg"
+
 echo "GX430T_NATIVE_APP_BUILD_DONE=true"
 echo "APP=$APP"
