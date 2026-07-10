@@ -362,6 +362,7 @@ struct GX430TBrandMark: View {
                 return
             }
 
+            loaded.isTemplate = true
             image = loaded
         }
     }
@@ -455,19 +456,26 @@ struct QuickPrintView: View {
     var body: some View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 18) {
-                HStack(spacing: 12) {
-                    GX430TBrandMark(size: 54)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        GX430TBrandMark(size: 48)
+                            .foregroundStyle(.primary)
 
-                    VStack(alignment: .leading, spacing: 4) {
                         Text("GX430T")
-                            .font(.system(size: 30, weight: .bold))
+                            .font(.system(size: 26, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
 
-                        Label(
-                            model.printerStatus,
-                            systemImage: model.printerOnline ? "printer.fill" : "printer"
-                        )
-                        .foregroundStyle(model.printerOnline ? .green : .secondary)
+                        Spacer(minLength: 0)
                     }
+
+                    Label(
+                        model.printerStatus,
+                        systemImage: model.printerOnline ? "printer.fill" : "printer"
+                    )
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(model.printerOnline ? .green : .secondary)
+                    .lineLimit(2)
                 }
 
                 Divider()
@@ -507,7 +515,7 @@ struct QuickPrintView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(22)
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+            .navigationSplitViewColumnWidth(min: 230, ideal: 250, max: 280)
         } detail: {
             if showingHistory {
                 HistoryView()

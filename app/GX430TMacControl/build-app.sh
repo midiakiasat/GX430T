@@ -33,6 +33,7 @@ rsync -a \
   "$RESOURCES/"
 
 test -f "$RESOURCES/ZEBRAGX430TLOGO.svg"
+test -f "$RESOURCES/GX430TAppIcon.icns"
 
 echo "GX430T_NATIVE_APP_BUILD_DONE=true"
 echo "APP=$APP"
