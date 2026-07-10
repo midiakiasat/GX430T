@@ -39,6 +39,11 @@ gx430tctl host-pairing-code
 gx430tctl host-rotate-pairing
 gx430tctl host-secret
 gx430tctl host-remove
+gx430tctl client-pair <host-url> <pairing-code> [client-name]
+gx430tctl client-status
+gx430tctl client-info
+gx430tctl client-print <text|code128|code39|qr> <value> [copies]
+gx430tctl client-remove
 gx430tctl diagnose
 gx430tctl verify
 USAGE
@@ -184,6 +189,41 @@ PY_HOST_SECRET
     ;;
   host-remove)
     bash "$ROOT/install/remove-host-service.sh"
+    ;;
+  client-pair)
+    shift
+    HOST_URL="${1:-}"
+    PAIRING_CODE="${2:-}"
+    CLIENT_NAME="${3:-$(scutil --get ComputerName 2>/dev/null || hostname)}"
+
+    if [[ -z "$HOST_URL" || -z "$PAIRING_CODE" ]]; then
+      echo "usage: gx430tctl client-pair <host-url> <pairing-code> [client-name]" >&2
+      exit 64
+    fi
+
+    python3 "$ROOT/client/gx430t_client.py"       pair "$HOST_URL" "$PAIRING_CODE"       --name "$CLIENT_NAME"
+    ;;
+  client-status)
+    python3 "$ROOT/client/gx430t_client.py" status
+    ;;
+  client-info)
+    python3 "$ROOT/client/gx430t_client.py" info
+    ;;
+  client-print)
+    shift
+    KIND="${1:-}"
+    VALUE="${2:-}"
+    COPIES="${3:-1}"
+
+    if [[ -z "$KIND" || -z "$VALUE" ]]; then
+      echo "usage: gx430tctl client-print <text|code128|code39|qr> <value> [copies]" >&2
+      exit 64
+    fi
+
+    python3 "$ROOT/client/gx430t_client.py"       print "$KIND" "$VALUE" "$COPIES"
+    ;;
+  client-remove)
+    python3 "$ROOT/client/gx430t_client.py" remove
     ;;
   diagnose)
     echo "=== GX430T DIAGNOSE ==="

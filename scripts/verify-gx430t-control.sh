@@ -33,3 +33,8 @@ grep -q "/v1/print" host-service/gx430t_host.py
 grep -q '"/v1/pair"' host-service/gx430t_host.py
 grep -q "host-pairing-code" bin/gx430tctl
 grep -q "host-rotate-pairing" bin/gx430tctl
+
+test -x client/gx430t_client.py
+grep -q "client-pair" bin/gx430tctl
+grep -q "client-print" bin/gx430tctl
+grep -q "GX430T_REMOTE_PRINT_ACCEPTED" client/gx430t_client.py
