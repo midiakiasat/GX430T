@@ -1,0 +1,10 @@
+{
+  "schema": "gx430t.live.client_kit_record.v1",
+  "product": "GX430T Mac Control",
+  "host_ip": "192.168.0.55",
+  "client_queue": "GX430t_shared",
+  "client_installer": "client-kit/install-colleague-mac.sh",
+  "client_docs": "docs/COLLEAGUE_CLIENT_INSTALL.md",
+  "status": "COLLEAGUE_CLIENT_KIT_READY",
+  "timestamp_utc": "2026-07-10T11:50:11Z"
+}
