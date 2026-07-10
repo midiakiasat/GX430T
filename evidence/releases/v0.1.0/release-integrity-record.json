@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "repository": "midiakiasat/GX430T",
   "tag": "v0.1.0",
-  "tag_commit": "5d81790cb5fb5f22beeefd2403759bd4c90edb68",
-  "current_head": "5d81790cb5fb5f22beeefd2403759bd4c90edb68",
+  "tag_commit": "0a103b28ac3b205ea75876578633e989b1e2b46f",
+  "current_head": "0a103b28ac3b205ea75876578633e989b1e2b46f",
   "package": "GX430T-Mac-Control-0.1.0.pkg",
   "package_sha256": "52fcee6e6eb17195df409b5ab30c1eb646f49a0e822dfd52af10a0a074c0cd79",
   "package_size_bytes": 16418,
@@ -17,6 +17,7 @@
   "client_queue": "GX430t_shared",
   "signature_status": "UNSIGNED",
   "notarization_status": "NOT_NOTARIZED",
-  "status": "RELEASE_0_1_0_RESEALED",
-  "timestamp_utc": "2026-07-10T11:52:14Z"
+  "status": "RELEASE_0_1_0_RESEALED_AFTER_TAG_MOVE",
+  "timestamp_utc": "2026-07-10T11:52:39Z",
+  "tag_object": "d5288c973037b885c51db22f68d65e6065f20a65"
 }
