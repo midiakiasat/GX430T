@@ -43,6 +43,8 @@ gx430tctl client-pair <host-url> <pairing-code> [client-name]
 gx430tctl client-status
 gx430tctl client-info
 gx430tctl client-print <text|code128|code39|qr> <value> [copies]
+gx430tctl client-jobs [limit]
+gx430tctl client-job-summary
 gx430tctl client-remove
 gx430tctl app-autostart-on
 gx430tctl app-autostart-off
@@ -227,6 +229,13 @@ PY_HOST_SECRET
     fi
 
     python3 "$ROOT/client/gx430t_client.py"       print "$KIND" "$VALUE" "$COPIES"
+    ;;
+  client-jobs)
+    shift
+    python3 "$ROOT/client/gx430t_client.py" jobs "${1:-25}"
+    ;;
+  client-job-summary)
+    python3 "$ROOT/client/gx430t_client.py" job-summary
     ;;
   client-remove)
     python3 "$ROOT/client/gx430t_client.py" remove

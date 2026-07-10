@@ -189,6 +189,42 @@ def print_job(kind: str, value: str, copies: int) -> int:
     return 1
 
 
+def jobs(limit: int = 25) -> int:
+    config = load_config()
+
+    code, payload = request_json(
+        "GET",
+        f"{config['hostURL']}/v1/jobs?limit={max(1, min(limit, 500))}",
+        token=config["token"],
+    )
+
+    print(json.dumps(payload, indent=2))
+
+    if code == 200:
+        print("GX430T_REMOTE_JOBS_READ=true")
+        return 0
+
+    return 1
+
+
+def job_summary() -> int:
+    config = load_config()
+
+    code, payload = request_json(
+        "GET",
+        f"{config['hostURL']}/v1/jobs/summary?limit=500",
+        token=config["token"],
+    )
+
+    print(json.dumps(payload, indent=2))
+
+    if code == 200:
+        print("GX430T_REMOTE_JOB_SUMMARY_READ=true")
+        return 0
+
+    return 1
+
+
 def remove() -> int:
     if CONFIG_FILE.exists():
         CONFIG_FILE.unlink()
@@ -210,6 +246,11 @@ def parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status")
     sub.add_parser("info")
+
+    jobs_parser = sub.add_parser("jobs")
+    jobs_parser.add_argument("limit", nargs="?", type=int, default=25)
+
+    sub.add_parser("job-summary")
     sub.add_parser("remove")
 
     print_parser = sub.add_parser("print")
@@ -232,6 +273,10 @@ def main() -> int:
             return info()
         if args.command == "print":
             return print_job(args.kind, args.value, args.copies)
+        if args.command == "jobs":
+            return jobs(args.limit)
+        if args.command == "job-summary":
+            return job_summary()
         if args.command == "remove":
             return remove()
     except (RuntimeError, ValueError) as exc:

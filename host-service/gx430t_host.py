@@ -68,6 +68,68 @@ def append_job(record: dict[str, Any]) -> None:
         handle.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
+def read_jobs(limit: int = 100) -> list[dict[str, Any]]:
+    if not LOG_FILE.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+
+    try:
+        with LOG_FILE.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(payload, dict):
+                    records.append(payload)
+    except OSError:
+        return []
+
+    records.reverse()
+    return records[: max(1, min(limit, 500))]
+
+
+def job_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    print_jobs = [
+        record
+        for record in records
+        if "jobId" in record
+    ]
+
+    successful = sum(
+        1
+        for record in print_jobs
+        if record.get("success") is True
+    )
+
+    failed = sum(
+        1
+        for record in print_jobs
+        if record.get("success") is False
+    )
+
+    copies = sum(
+        int(record.get("copies", 0) or 0)
+        for record in print_jobs
+    )
+
+    latest = print_jobs[0] if print_jobs else None
+
+    return {
+        "totalJobs": len(print_jobs),
+        "successfulJobs": successful,
+        "failedJobs": failed,
+        "totalCopies": copies,
+        "latestJob": latest,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "GX430THost/1.0"
 
@@ -137,6 +199,46 @@ class Handler(BaseHTTPRequestHandler):
                     "port": PORT,
                     "authentication": "pairing-code-and-bearer-token",
                     "pairingEnabled": bool(config.get("pairingEnabled", False)),
+                },
+            )
+            return
+
+        if self.path.startswith("/v1/jobs"):
+            if not self.authenticated():
+                self.send_json(401, {"error": "unauthorized"})
+                return
+
+            limit = 100
+
+            if "?" in self.path:
+                query = self.path.split("?", 1)[1]
+
+                for field in query.split("&"):
+                    if field.startswith("limit="):
+                        try:
+                            limit = int(field.split("=", 1)[1])
+                        except ValueError:
+                            limit = 100
+
+            records = read_jobs(limit)
+
+            if self.path.startswith("/v1/jobs/summary"):
+                self.send_json(
+                    200,
+                    {
+                        "service": "GX430T Print Host",
+                        "protocol": 1,
+                        "summary": job_summary(records),
+                    },
+                )
+                return
+
+            self.send_json(
+                200,
+                {
+                    "service": "GX430T Print Host",
+                    "protocol": 1,
+                    "jobs": records,
                 },
             )
             return

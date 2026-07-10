@@ -49,3 +49,10 @@ test -x install/remove-app-autostart.sh
 grep -q "app-autostart-on" bin/gx430tctl
 grep -q "host-restart" bin/gx430tctl
 test -f docs/APP_LIFECYCLE.md
+
+grep -q '"/v1/jobs"' host-service/gx430t_host.py
+grep -q '"/v1/jobs/summary"' host-service/gx430t_host.py
+grep -q "client-jobs" bin/gx430tctl
+grep -q "client-job-summary" bin/gx430tctl
+grep -q "GX430T_REMOTE_JOBS_READ" client/gx430t_client.py
+test -f docs/JOB_HISTORY.md
