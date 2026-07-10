@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -32,6 +33,18 @@ def read_config() -> dict[str, Any]:
         return json.loads(CONFIG.read_text())
     except Exception:
         return {}
+
+
+def write_config(config: dict[str, Any]) -> None:
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    temporary = CONFIG.with_suffix(".tmp")
+    temporary.write_text(json.dumps(config, indent=2) + "\n")
+    temporary.chmod(0o600)
+    temporary.replace(CONFIG)
+
+
+def generate_pairing_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def run_cli(arguments: list[str], timeout: int = 30) -> tuple[int, str]:
@@ -122,7 +135,8 @@ class Handler(BaseHTTPRequestHandler):
                     "protocol": 1,
                     "hostName": config.get("hostName", "GX430T Host"),
                     "port": PORT,
-                    "authentication": "bearer-token",
+                    "authentication": "pairing-code-and-bearer-token",
+                    "pairingEnabled": bool(config.get("pairingEnabled", False)),
                 },
             )
             return
@@ -130,6 +144,64 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:
+        if self.path == "/v1/pair":
+            try:
+                payload = self.read_body()
+                supplied_code = str(payload.get("pairingCode", "")).strip()
+                client_name = str(payload.get("clientName", "GX430T Client")).strip()[:120]
+
+                config = read_config()
+                expected_code = str(config.get("pairingCode", ""))
+                pairing_enabled = bool(config.get("pairingEnabled", False))
+
+                if not pairing_enabled or not expected_code:
+                    self.send_json(403, {"error": "pairing_disabled"})
+                    return
+
+                if not secrets.compare_digest(supplied_code, expected_code):
+                    time.sleep(0.35)
+                    self.send_json(401, {"error": "invalid_pairing_code"})
+                    return
+
+                token = str(config.get("token", ""))
+                if not token:
+                    self.send_json(503, {"error": "host_token_unavailable"})
+                    return
+
+                next_code = generate_pairing_code()
+                config["pairingCode"] = next_code
+                config["pairingEnabled"] = True
+                config["lastPairedClient"] = client_name
+                config["lastPairedAddress"] = self.client_address[0]
+                config["lastPairedTimestamp"] = int(time.time())
+                write_config(config)
+
+                append_job(
+                    {
+                        "event": "client_paired",
+                        "clientName": client_name,
+                        "remoteAddress": self.client_address[0],
+                        "timestamp": int(time.time()),
+                    }
+                )
+
+                self.send_json(
+                    200,
+                    {
+                        "paired": True,
+                        "protocol": 1,
+                        "hostName": config.get("hostName", "GX430T Host"),
+                        "token": token,
+                    },
+                )
+                return
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                self.send_json(400, {"error": "invalid_request", "detail": str(exc)})
+                return
+            except Exception as exc:
+                self.send_json(500, {"error": "internal_error", "detail": str(exc)})
+                return
+
         if self.path != "/v1/print":
             self.send_json(404, {"error": "not_found"})
             return

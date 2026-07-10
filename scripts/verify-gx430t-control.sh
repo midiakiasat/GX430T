@@ -29,3 +29,7 @@ test -x install/install-host-service.sh
 test -x install/remove-host-service.sh
 grep -q "host-install" bin/gx430tctl
 grep -q "/v1/print" host-service/gx430t_host.py
+
+grep -q '"/v1/pair"' host-service/gx430t_host.py
+grep -q "host-pairing-code" bin/gx430tctl
+grep -q "host-rotate-pairing" bin/gx430tctl

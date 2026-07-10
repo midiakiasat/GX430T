@@ -35,6 +35,8 @@ gx430tctl print-qr <value> [copies]
 gx430tctl host-install
 gx430tctl host-status
 gx430tctl host-info
+gx430tctl host-pairing-code
+gx430tctl host-rotate-pairing
 gx430tctl host-secret
 gx430tctl host-remove
 gx430tctl diagnose
@@ -135,6 +137,39 @@ print(f"GX430T_PAIRING_CODE={config.get('pairingCode', '')}")
 print(f"GX430T_PAIRING_ENABLED={str(config.get('pairingEnabled', False)).lower()}")
 print(f"GX430T_HOST_PROTOCOL={config.get('protocol', 1)}")
 PY_HOST_INFO
+    ;;
+  host-pairing-code)
+    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
+    test -f "$CONFIG"
+    python3 - "$CONFIG" <<'PY_HOST_PAIRING'
+import json
+import sys
+
+config = json.load(open(sys.argv[1]))
+print(config.get("pairingCode", ""))
+PY_HOST_PAIRING
+    ;;
+  host-rotate-pairing)
+    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
+    test -f "$CONFIG"
+    NEW_CODE="$(python3 - <<'PY_PAIRING_CODE'
+import secrets
+print(f"{secrets.randbelow(1000000):06d}")
+PY_PAIRING_CODE
+)"
+    python3 - "$CONFIG" "$NEW_CODE" <<'PY_ROTATE_PAIRING'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+config = json.loads(path.read_text())
+config["pairingCode"] = sys.argv[2]
+config["pairingEnabled"] = True
+path.write_text(json.dumps(config, indent=2) + "\n")
+path.chmod(0o600)
+PY_ROTATE_PAIRING
+    echo "$NEW_CODE"
     ;;
   host-secret)
     CONFIG="$HOME/Library/Application Support/GX430T/host.json"

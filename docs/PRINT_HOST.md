@@ -47,3 +47,30 @@ code39
 qr
 ```
 
+
+## Pairing
+
+A client pairs once using the six-digit code shown by:
+
+```bash
+gx430tctl host-info
+````
+
+Pairing request:
+
+```bash
+curl \
+  -H "Content-Type: application/json" \
+  -d '{"pairingCode":"123456","clientName":"Studio iPhone"}' \
+  http://HOST_IP:43043/v1/pair
+```
+
+A successful request returns the bearer token to the client and immediately rotates the six-digit pairing code.
+
+Rotate the code manually:
+
+```bash
+gx430tctl host-rotate-pairing
+```
+
+Print-host tokens must never be committed, published, displayed in release evidence, or shared outside authorized devices.
