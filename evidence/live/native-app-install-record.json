@@ -1,0 +1,11 @@
+{
+  "schema": "gx430t.live.native_app_install_record.v1",
+  "product": "GX430T Mac Control",
+  "app_path": "/Applications/GX430T Mac Control.app",
+  "bundle_identifier": "com.kaaffilm.gx430t.mac-control.app",
+  "command_backend": "/usr/local/bin/gx430tctl",
+  "local_queue": "GX430t",
+  "live_print_test": "CODE128_1234567890_SENT",
+  "status": "NATIVE_APP_INSTALLED_AND_OPENED",
+  "timestamp_utc": "2026-07-10T12:00:58Z"
+}
