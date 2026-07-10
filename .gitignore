@@ -11,3 +11,5 @@ release/*.md
 release/*.pkg
 release/*.pkg.sha256
 shared/GX430TKit/.build/
+
+app/GX430TMacControl/Resources/GX430TAppIcon.iconset/
