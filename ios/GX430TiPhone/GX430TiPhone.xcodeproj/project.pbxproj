@@ -1,0 +1,452 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		303EE64D728FDF21D137319B /* GX430TKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0BDFFDAD6E2D3999AB20E80 /* GX430TKit */; };
+		78C6B1D07DF720F2434995CC /* GX430TPairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4FE3A5770BBB728467511B /* GX430TPairingView.swift */; };
+		8DDD859CD0DFE7654B0B3A72 /* GX430TiPhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BEDC5ED3C372F87CEBF23A /* GX430TiPhoneTests.swift */; };
+		998A0E3F786D80556C3489D6 /* GX430TiPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */; };
+		A95A938A5B23322EA94C0BFB /* GX430TiPhoneRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */; };
+		E05085EA1E6B2742AE158977 /* GX430TiPhoneModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		92ECCB995E1CDCD8FA2B953A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 687F5FB15444DFD3E1A0451C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4C124B20854BC0884C744A3F;
+			remoteInfo = GX430TiPhone;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1B4FE3A5770BBB728467511B /* GX430TPairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TPairingView.swift; sourceTree = "<group>"; };
+		34BEDC5ED3C372F87CEBF23A /* GX430TiPhoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneTests.swift; sourceTree = "<group>"; };
+		487FFBA3532F850FD521D640 /* GX430TiPhoneTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GX430TiPhoneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		51429513F50B694AFC646783 /* GX430TiPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GX430TiPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneRootView.swift; sourceTree = "<group>"; };
+		56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneApp.swift; sourceTree = "<group>"; };
+		789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneModel.swift; sourceTree = "<group>"; };
+		EC38B98623FD19954B09964B /* GX430TKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GX430TKit; path = ../../shared/GX430TKit; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B5AB86AB86B911B1E927CC8B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				303EE64D728FDF21D137319B /* GX430TKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		09D574D877A714FB1FF74000 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				34BEDC5ED3C372F87CEBF23A /* GX430TiPhoneTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		5D56BAA05919C76DBC3FA04F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				51429513F50B694AFC646783 /* GX430TiPhone.app */,
+				487FFBA3532F850FD521D640 /* GX430TiPhoneTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8828F8274F135FF69427EC2B /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */,
+				789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */,
+				5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */,
+				1B4FE3A5770BBB728467511B /* GX430TPairingView.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		D760D2EEBB5857C4F83FABCA /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				EC38B98623FD19954B09964B /* GX430TKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		F061310D335AA24C2CA47022 = {
+			isa = PBXGroup;
+			children = (
+				D760D2EEBB5857C4F83FABCA /* Packages */,
+				8828F8274F135FF69427EC2B /* Sources */,
+				09D574D877A714FB1FF74000 /* Tests */,
+				5D56BAA05919C76DBC3FA04F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		318EEF2E2517A78E8B81F964 /* GX430TiPhoneTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D140DF02511EA20486B88ABF /* Build configuration list for PBXNativeTarget "GX430TiPhoneTests" */;
+			buildPhases = (
+				B0165F926EF0DA1E53E48472 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3463C865F5F47DFEFDCF665D /* PBXTargetDependency */,
+			);
+			name = GX430TiPhoneTests;
+			packageProductDependencies = (
+			);
+			productName = GX430TiPhoneTests;
+			productReference = 487FFBA3532F850FD521D640 /* GX430TiPhoneTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		4C124B20854BC0884C744A3F /* GX430TiPhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E19F1F33C399C1819959D01C /* Build configuration list for PBXNativeTarget "GX430TiPhone" */;
+			buildPhases = (
+				15D339ABE3253FBCA886C130 /* Sources */,
+				B5AB86AB86B911B1E927CC8B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GX430TiPhone;
+			packageProductDependencies = (
+				D0BDFFDAD6E2D3999AB20E80 /* GX430TKit */,
+			);
+			productName = GX430TiPhone;
+			productReference = 51429513F50B694AFC646783 /* GX430TiPhone.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		687F5FB15444DFD3E1A0451C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4C124B20854BC0884C744A3F = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A82367DF4B9BB9F6C42B99D1 /* Build configuration list for PBXProject "GX430TiPhone" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F061310D335AA24C2CA47022;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5EEC4AF9B3B3F373561522D8 /* XCLocalSwiftPackageReference "../../shared/GX430TKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5D56BAA05919C76DBC3FA04F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4C124B20854BC0884C744A3F /* GX430TiPhone */,
+				318EEF2E2517A78E8B81F964 /* GX430TiPhoneTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		15D339ABE3253FBCA886C130 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				78C6B1D07DF720F2434995CC /* GX430TPairingView.swift in Sources */,
+				998A0E3F786D80556C3489D6 /* GX430TiPhoneApp.swift in Sources */,
+				E05085EA1E6B2742AE158977 /* GX430TiPhoneModel.swift in Sources */,
+				A95A938A5B23322EA94C0BFB /* GX430TiPhoneRootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0165F926EF0DA1E53E48472 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8DDD859CD0DFE7654B0B3A72 /* GX430TiPhoneTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3463C865F5F47DFEFDCF665D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4C124B20854BC0884C744A3F /* GX430TiPhone */;
+			targetProxy = 92ECCB995E1CDCD8FA2B953A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		42EA807B6D9FCEA0123F206E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kaaffilm.gx430t.iphone;
+				PRODUCT_NAME = GX430T;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		76396456D7B4BD1469C788DC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kaaffilm.gx430t.iphone;
+				PRODUCT_NAME = GX430T;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		7B754034F268875BFA65C2D5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		900E866D21EDB6F3EB31667F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kaaffilm.GX430TiPhoneTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GX430TiPhone.app/GX430TiPhone";
+			};
+			name = Debug;
+		};
+		A914FE3CBAF0A575DBF73C7A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kaaffilm.GX430TiPhoneTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GX430TiPhone.app/GX430TiPhone";
+			};
+			name = Release;
+		};
+		BED51187E788C942FE8232F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A82367DF4B9BB9F6C42B99D1 /* Build configuration list for PBXProject "GX430TiPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7B754034F268875BFA65C2D5 /* Debug */,
+				BED51187E788C942FE8232F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D140DF02511EA20486B88ABF /* Build configuration list for PBXNativeTarget "GX430TiPhoneTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				900E866D21EDB6F3EB31667F /* Debug */,
+				A914FE3CBAF0A575DBF73C7A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E19F1F33C399C1819959D01C /* Build configuration list for PBXNativeTarget "GX430TiPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				42EA807B6D9FCEA0123F206E /* Debug */,
+				76396456D7B4BD1469C788DC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5EEC4AF9B3B3F373561522D8 /* XCLocalSwiftPackageReference "../../shared/GX430TKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../shared/GX430TKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0BDFFDAD6E2D3999AB20E80 /* GX430TKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GX430TKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 687F5FB15444DFD3E1A0451C /* Project object */;
+}

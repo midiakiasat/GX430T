@@ -38,3 +38,8 @@ test -x client/gx430t_client.py
 grep -q "client-pair" bin/gx430tctl
 grep -q "client-print" bin/gx430tctl
 grep -q "GX430T_REMOTE_PRINT_ACCEPTED" client/gx430t_client.py
+
+test -f branding/ZEBRAGX430TLOGO.svg
+test -f app/GX430TMacControl/Resources/ZEBRAGX430TLOGO.svg
+test -f ios/GX430TiPhone/Resources/ZEBRAGX430TLOGO.svg
+grep -q '<svg' branding/ZEBRAGX430TLOGO.svg
