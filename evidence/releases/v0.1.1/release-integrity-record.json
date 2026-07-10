@@ -4,11 +4,11 @@
   "version": "0.1.1",
   "repository": "midiakiasat/GX430T",
   "tag": "v0.1.1",
-  "tag_commit": "7e653eea2bdc2e4dba3f8ee455f86ca84f2ba4a4",
-  "current_head": "7e653eea2bdc2e4dba3f8ee455f86ca84f2ba4a4",
+  "tag_commit": "75c7ee7315bfdbdb5715311b578361751be0202d",
+  "current_head": "75c7ee7315bfdbdb5715311b578361751be0202d",
   "package": "GX430T-Mac-Control-0.1.1.pkg",
-  "package_sha256": "929bb0abd151092a6a4170f145e310c52d5590c033cc3aee736cac0dd9f1e180",
-  "package_size_bytes": 81172,
+  "package_sha256": "f2da6bfb364b79d29f994f4e4cab9f917c44b38b1960ef8da299f85f303d1971",
+  "package_size_bytes": 81499,
   "license": "Apache-2.0",
   "release_url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.1.1",
   "installed_app": "/Applications/GX430T Mac Control.app",
@@ -19,6 +19,6 @@
   "client_queue": "GX430t_shared",
   "signature_status": "UNSIGNED",
   "notarization_status": "NOT_NOTARIZED",
-  "status": "RELEASE_0_1_1_NATIVE_APP_READY",
-  "timestamp_utc": "2026-07-10T12:01:33Z"
+  "status": "RELEASE_0_1_1_NATIVE_APP_HEAD_ALIGNED",
+  "timestamp_utc": "2026-07-10T12:02:08Z"
 }
