@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-chmod +x /usr/local/gx430t/bin/gx430tctl || true
-chmod +x /usr/local/gx430t/scripts/*.sh || true
-chmod +x /usr/local/gx430t/install/*.sh || true
+chmod +x /usr/local/gx430t/bin/gx430tctl
+chmod +x /usr/local/gx430t/scripts/*.sh
+chmod +x /usr/local/gx430t/install/*.sh
+
+if [ -d "/usr/local/gx430t/GX430T Mac Control.app" ]; then
+  rm -rf "/Applications/GX430T Mac Control.app"
+  cp -R "/usr/local/gx430t/GX430T Mac Control.app" "/Applications/GX430T Mac Control.app"
+  chmod +x "/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
+fi
 
 ln -sf /usr/local/gx430t/bin/gx430tctl /usr/local/bin/gx430tctl
 
 echo "GX430T_POSTINSTALL_DONE=true"
-exit 0

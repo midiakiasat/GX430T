@@ -3,20 +3,31 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${GX430T_VERSION:-0.1.0}"
-IDENTIFIER="com.kaaffilm.gx430t.mac-control"
+IDENTIFIER="${GX430T_IDENTIFIER:-com.kaaffilm.gx430t.mac-control}"
 PKGROOT="$ROOT/installer/pkgroot"
-OUTDIR="$ROOT/release"
-PKG="$OUTDIR/GX430T-Mac-Control-$VERSION.pkg"
+RELEASE="$ROOT/release"
+PKG="$RELEASE/GX430T-Mac-Control-$VERSION.pkg"
 
-rm -rf "$PKGROOT/usr/local/gx430t"
-mkdir -p "$PKGROOT/usr/local/gx430t" "$PKGROOT/usr/local/bin" "$OUTDIR"
+sudo chown -R "$(id -un)":"$(id -gn)" "$ROOT/app/GX430TMacControl" "$PKGROOT" "$RELEASE" 2>/dev/null || true
+sudo chmod -R u+rwX "$ROOT/app/GX430TMacControl" "$PKGROOT" "$RELEASE" 2>/dev/null || true
+rm -rf "$PKGROOT"
+
+mkdir -p "$PKGROOT/usr/local/gx430t" "$PKGROOT/usr/local/bin" "$PKGROOT/Applications" "$RELEASE"
 
 rsync -a \
   --exclude ".git" \
-  --exclude "installer/pkgroot" \
   --exclude "release" \
+  --exclude "installer/pkgroot" \
+  --exclude "app/GX430TMacControl/build" \
   "$ROOT/" "$PKGROOT/usr/local/gx430t/"
 
+bash "$ROOT/app/GX430TMacControl/build-app.sh"
+
+rsync -a "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" "$PKGROOT/usr/local/gx430t/"
+rsync -a "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" "$PKGROOT/Applications/"
+
+chmod +x "$PKGROOT/usr/local/gx430t/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
+chmod +x "$PKGROOT/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
 chmod +x "$PKGROOT/usr/local/gx430t/bin/gx430tctl"
 chmod +x "$PKGROOT/usr/local/gx430t/scripts/"*.sh
 chmod +x "$PKGROOT/usr/local/gx430t/install/"*.sh
@@ -25,9 +36,9 @@ ln -sf /usr/local/gx430t/bin/gx430tctl "$PKGROOT/usr/local/bin/gx430tctl"
 
 pkgbuild \
   --root "$PKGROOT" \
-  --scripts "$ROOT/installer/scripts" \
   --identifier "$IDENTIFIER" \
   --version "$VERSION" \
+  --scripts "$ROOT/installer/scripts" \
   --install-location / \
   "$PKG"
 

@@ -17,6 +17,7 @@ swiftc "$ROOT/Sources/GX430TMacControl/main.swift" \
   -framework SwiftUI \
   -framework AppKit
 
+chmod 755 "$MACOS/GX430TMacControl"
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 
 echo "GX430T_NATIVE_APP_BUILD_DONE=true"
