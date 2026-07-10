@@ -1,0 +1,21 @@
+{
+  "schema": "gx430t.release_finality_audit.v1",
+  "product": "GX430T Mac Control",
+  "repository": "midiakiasat/GX430T",
+  "version": "0.1.1",
+  "tag": "v0.1.1",
+  "head_sha": "1fb0580d1b9460756dbcb64721549c2eabe57a52",
+  "tag_commit_sha": "1fb0580d1b9460756dbcb64721549c2eabe57a52",
+  "release_tag": "v0.1.1",
+  "package_sha256": "f2da6bfb364b79d29f994f4e4cab9f917c44b38b1960ef8da299f85f303d1971",
+  "github_asset_digest": "sha256:f2da6bfb364b79d29f994f4e4cab9f917c44b38b1960ef8da299f85f303d1971",
+  "integrity_record_sha256": "f2da6bfb364b79d29f994f4e4cab9f917c44b38b1960ef8da299f85f303d1971",
+  "installed_app": "/Applications/GX430T Mac Control.app",
+  "bundle_identifier": "com.kaaffilm.gx430t.mac-control.app",
+  "command_backend": "/usr/local/bin/gx430tctl",
+  "local_queue": "GX430t",
+  "host_ipp_endpoint": "ipp://192.168.0.55/printers/GX430t",
+  "client_queue": "GX430t_shared",
+  "finality": "NATIVE_APP_HEAD_TAG_RELEASE_ASSET_RECORD_ALIGNED",
+  "timestamp_utc": "2026-07-10T12:02:43Z"
+}
