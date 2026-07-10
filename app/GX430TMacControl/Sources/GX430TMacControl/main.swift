@@ -2,6 +2,20 @@ import SwiftUI
 import AppKit
 import Foundation
 
+enum GX430TConnectionMode: String {
+    case local = "USB Host"
+    case remote = "Network Client"
+    case unavailable = "Unavailable"
+
+    var symbol: String {
+        switch self {
+        case .local: return "cable.connector"
+        case .remote: return "network"
+        case .unavailable: return "exclamationmark.triangle"
+        }
+    }
+}
+
 enum PrintKind: String, CaseIterable, Identifiable, Codable {
     case text = "Text"
     case code128 = "Code 128"
@@ -47,6 +61,11 @@ final class GX430TModel: ObservableObject {
     @Published var isPrinting = false
     @Published var message = "Ready"
     @Published var history: [PrintHistoryItem] = []
+    @Published var connectionMode: GX430TConnectionMode = .unavailable
+    @Published var hostURL = ""
+    @Published var pairingCode = ""
+    @Published var clientName = Host.current().localizedName ?? "GX430T Mac"
+    @Published var isPairing = false
 
     private let historyKey = "GX430TPrintHistory"
     private let cli = "/usr/local/bin/gx430tctl"
@@ -65,24 +84,42 @@ final class GX430TModel: ObservableObject {
     func refreshStatus() {
         execute(arguments: ["status"]) { [weak self] code, output in
             guard let self else { return }
-            let online = output.contains("GX430T_STATUS=ONLINE")
-            let printing = output.contains("GX430T_STATUS=PRINTING")
 
-            self.printerOnline = code == 0 && (online || printing)
+            let localOnline = output.contains("GX430T_STATUS=ONLINE")
+            let localPrinting = output.contains("GX430T_STATUS=PRINTING")
 
-            if printing {
-                self.printerStatus = "GX430t Printing"
-            } else if online {
-                self.printerStatus = "GX430t Online"
-            } else if output.contains("GX430T_STATUS=OFFLINE") {
-                self.printerStatus = "GX430t Offline"
-            } else if output.contains("GX430T_STATUS=NOT_CONFIGURED") {
-                self.printerStatus = "GX430t Not Configured"
-            } else {
-                self.printerStatus = "GX430t Unavailable"
+            if code == 0 && (localOnline || localPrinting) {
+                self.connectionMode = .local
+                self.printerOnline = true
+                self.printerStatus = localPrinting ? "GX430t Printing" : "GX430t Online"
+                self.message = "Connected directly through this Mac."
+                return
             }
-            if !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            self.execute(arguments: ["client-status"]) { [weak self] remoteCode, remoteOutput in
+                guard let self else { return }
+
+                let remoteOnline = remoteOutput.contains("GX430T_REMOTE_STATUS=ONLINE")
+
+                if remoteCode == 0 && remoteOnline {
+                    self.connectionMode = .remote
+                    self.printerOnline = true
+                    self.printerStatus = "GX430t Online via Host"
+                    self.message = "Connected securely to the GX430T Print Host."
+                } else {
+                    self.connectionMode = .unavailable
+                    self.printerOnline = false
+
+                    if output.contains("GX430T_STATUS=OFFLINE") {
+                        self.printerStatus = "GX430t Offline"
+                    } else if output.contains("GX430T_STATUS=NOT_CONFIGURED") {
+                        self.printerStatus = "GX430t Not Configured"
+                    } else {
+                        self.printerStatus = "GX430t Unavailable"
+                    }
+
+                    self.message = "Connect this Mac to the printer by USB or pair it with a GX430T Print Host."
+                }
             }
         }
     }
@@ -105,7 +142,28 @@ final class GX430TModel: ObservableObject {
         isPrinting = true
         message = "Sending \(copies) \(copies == 1 ? "label" : "labels")…"
 
-        execute(arguments: [kind.command, cleanValue, String(copies)]) { [weak self] code, output in
+        let arguments: [String]
+
+        switch connectionMode {
+        case .local:
+            arguments = [kind.command, cleanValue, String(copies)]
+        case .remote:
+            let remoteKind: String
+            switch kind {
+            case .text: remoteKind = "text"
+            case .code128: remoteKind = "code128"
+            case .code39: remoteKind = "code39"
+            case .qr: remoteKind = "qr"
+            }
+            arguments = ["client-print", remoteKind, cleanValue, String(copies)]
+        case .unavailable:
+            isPrinting = false
+            message = "GX430t is unavailable. Connect USB or pair with the print host."
+            NSSound.beep()
+            return
+        }
+
+        execute(arguments: arguments) { [weak self] code, output in
             guard let self else { return }
 
             self.isPrinting = false
@@ -138,6 +196,55 @@ final class GX430TModel: ObservableObject {
                 NSSound.beep()
             }
 
+            self.refreshStatus()
+        }
+    }
+
+    func pairWithHost(completion: @escaping (Bool) -> Void) {
+        let cleanHost = hostURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanCode = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = clientName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanHost.isEmpty else {
+            message = "Enter the print-host address."
+            completion(false)
+            return
+        }
+
+        guard cleanCode.count == 6, cleanCode.allSatisfy({ $0.isNumber }) else {
+            message = "Enter the six-digit pairing code."
+            completion(false)
+            return
+        }
+
+        isPairing = true
+        message = "Pairing with GX430T Print Host…"
+
+        execute(arguments: ["client-pair", cleanHost, cleanCode, cleanName]) { [weak self] code, output in
+            guard let self else { return }
+
+            self.isPairing = false
+
+            if code == 0 && output.contains("GX430T_CLIENT_PAIRED=true") {
+                self.connectionMode = .remote
+                self.pairingCode = ""
+                self.message = "Mac paired successfully."
+                self.refreshStatus()
+                completion(true)
+            } else {
+                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                NSSound.beep()
+                completion(false)
+            }
+        }
+    }
+
+    func removeClientPairing() {
+        execute(arguments: ["client-remove"]) { [weak self] _, output in
+            guard let self else { return }
+            self.connectionMode = .unavailable
+            self.printerOnline = false
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
             self.refreshStatus()
         }
     }
@@ -307,6 +414,7 @@ struct BarcodePreview: View {
 struct QuickPrintView: View {
     @EnvironmentObject private var model: GX430TModel
     @State private var showingHistory = false
+    @State private var showingConnection = false
 
     var body: some View {
         NavigationSplitView {
@@ -335,6 +443,13 @@ struct QuickPrintView: View {
                 }
                 .buttonStyle(.plain)
 
+                Button {
+                    showingConnection = true
+                } label: {
+                    Label("Connection", systemImage: model.connectionMode.symbol)
+                }
+                .buttonStyle(.plain)
+
                 Spacer()
 
                 Button {
@@ -358,6 +473,10 @@ struct QuickPrintView: View {
             }
         }
         .frame(minWidth: 920, minHeight: 650)
+        .sheet(isPresented: $showingConnection) {
+            ConnectionView()
+                .environmentObject(model)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -517,6 +636,112 @@ struct HistoryView: View {
             }
         }
         .padding(30)
+    }
+}
+
+struct ConnectionView: View {
+    @EnvironmentObject private var model: GX430TModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.blue.opacity(0.12))
+                        .frame(width: 54, height: 54)
+
+                    Image(systemName: model.connectionMode.symbol)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("GX430T Connection")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    Text(model.connectionMode.rawValue)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if model.connectionMode == .local {
+                Label(
+                    "This Mac is the USB Print Host.",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green)
+
+                Text("Other Macs and iPhones can pair with this Mac and send secure print jobs over the local network.")
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Pair with the work Mac")
+                        .font(.headline)
+
+                    TextField("Host address — for example 192.168.1.5:43043", text: $model.hostURL)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Six-digit pairing code", text: $model.pairingCode)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("This Mac name", text: $model.clientName)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        if model.connectionMode == .remote {
+                            Button("Remove Pairing", role: .destructive) {
+                                model.removeClientPairing()
+                            }
+                        }
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            dismiss()
+                        }
+
+                        Button {
+                            model.pairWithHost { succeeded in
+                                if succeeded {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            if model.isPairing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(width: 90)
+                            } else {
+                                Text("Pair Mac")
+                                    .frame(width: 90)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isPairing)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
+                    .foregroundStyle(model.printerOnline ? .green : .secondary)
+
+                Text(model.message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Spacer()
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
     }
 }
 
@@ -684,6 +909,10 @@ struct MenuBarContent: View {
                 } label: {
                     Label("Open App", systemImage: "macwindow")
                 }
+
+                Text(model.connectionMode.rawValue)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
 
                 Spacer()
 
