@@ -1,0 +1,15 @@
+{
+  "schema": "gx430t.macos_distribution_readiness.v1",
+  "product": "GX430T Mac Control",
+  "source_head": "6b1575102df78a4ebbdfee15073625caf494c39c",
+  "developer_id_application_count": 0,
+  "developer_id_installer_count": 0,
+  "notarytool_available": true,
+  "notary_profile": "GX430T-NOTARY",
+  "notary_profile_ready": false,
+  "stapler_available": true,
+  "distribution_ready": false,
+  "pipeline_implemented": true,
+  "status": "MACOS_DISTRIBUTION_PIPELINE_IMPLEMENTED",
+  "timestamp_utc": "2026-07-11T15:56:42Z"
+}

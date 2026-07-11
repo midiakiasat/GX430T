@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 test -f LICENSE
 test -f README.md
 test -x scripts/print-code128.sh
@@ -60,3 +62,8 @@ test -f docs/JOB_HISTORY.md
 test -f docs/UNIFIED_DEPLOYMENT.md
 grep -q "physicalDeliveryVerified" host-service/gx430t_host.py
 grep -q "SUBMITTED_TO_CUPS" host-service/gx430t_host.py
+
+test -x "$ROOT/release-tools/audit-macos-distribution.sh"
+test -x "$ROOT/release-tools/configure-notary-profile.sh"
+test -x "$ROOT/release-tools/build-signed-notarized-macos.sh"
+test -f "$ROOT/docs/MACOS_SIGNING_NOTARIZATION.md"
