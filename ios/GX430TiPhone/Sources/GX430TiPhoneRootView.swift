@@ -12,6 +12,8 @@ struct GX430TiPhoneRootView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    GX430TBrandHeader()
+
                     statusCard
                     formatPicker
                     contentEditor

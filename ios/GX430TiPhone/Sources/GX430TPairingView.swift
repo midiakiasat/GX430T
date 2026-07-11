@@ -5,6 +5,9 @@ struct GX430TPairingView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        VStack(spacing: 18) {
+            GX430TBrandHeader(compact: true)
+
         NavigationStack {
             Form {
                 Section {
@@ -88,4 +91,5 @@ struct GX430TPairingView: View {
             }
         }
     }
+        }
 }
