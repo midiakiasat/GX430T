@@ -79,3 +79,7 @@ bash -n "$ROOT/updater/run-update-check.sh"
 bash -n "$ROOT/bin/gx430t-update"
 bash -n "$ROOT/install/install-updater-service.sh"
 bash -n "$ROOT/install/remove-updater-service.sh"
+
+test -x "$ROOT/scripts/verify-package-payload.sh"
+bash -n "$ROOT/scripts/verify-package-payload.sh"
+bash -n "$ROOT/installer/build-pkg.sh"

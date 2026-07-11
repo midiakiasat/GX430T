@@ -1,17 +1,22 @@
 
 .DS_Store
+app/GX430TMacControl/Resources/GX430TAppIcon.iconset/
 app/GX430TMacControl/build/
 installer/component.plist
 installer/pkgroot/
+ios/GX430TiPhone/**/*.xcuserstate
+ios/GX430TiPhone/**/Debug-iphoneos/
+ios/GX430TiPhone/**/Debug-iphonesimulator/
+ios/GX430TiPhone/**/DerivedData/
+ios/GX430TiPhone/**/DerivedDataDevice/
+ios/GX430TiPhone/**/xcuserdata/
 ios/GX430TiPhone/*.xcodeproj/xcuserdata/
 ios/GX430TiPhone/*.xcworkspace/xcuserdata/
 ios/GX430TiPhone/DerivedData/
+ios/GX430TiPhone/DerivedDataDevice/
 ios/GX430TiPhone/build/
 release/*.md
 release/*.pkg
 release/*.pkg.sha256
 shared/GX430TKit/.build/
-app/GX430TMacControl/Resources/GX430TAppIcon.iconset/
-ios/GX430TiPhone/DerivedDataDevice/
-ios/GX430TiPhone/**/xcuserdata/
 shared/GX430TKit/.swiftpm/
