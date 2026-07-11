@@ -34,25 +34,15 @@ chmod +x "$PKGROOT/usr/local/gx430t/install/"*.sh
 
 ln -sf /usr/local/gx430t/bin/gx430tctl "$PKGROOT/usr/local/bin/gx430tctl"
 
-pkgbuild \
-  --root "$PKGROOT" \
-  --identifier "$IDENTIFIER" \
-  --version "$VERSION" \
-  --scripts "$ROOT/installer/scripts" \
-  --install-location / \
-  "$PKG"
-
-shasum -a 256 "$PKG" > "$PKG.sha256"
-
-# GX430T_PACKAGE_PAYLOAD_SANITIZE_V1_BEGIN
-find "$PKGROOT" -type d \( \
+# GX430T_PACKAGE_PAYLOAD_SANITIZE_V2_BEGIN
+find "$PKGROOT" -depth -type d \( \
   -name DerivedData \
   -o -name DerivedDataDevice \
   -o -name build \
   -o -name .build \
   -o -name .swiftpm \
   -o -name xcuserdata \
-\) -prune -exec rm -rf {} +
+\) -exec rm -rf {} +
 
 find "$PKGROOT" -type f \( \
   -name '*.xcuserstate' \
@@ -74,8 +64,17 @@ if find "$PKGROOT" \
   echo "GX430T_GENERATED_BUILD_STATE_IN_PACKAGE=true" >&2
   exit 1
 fi
-# GX430T_PACKAGE_PAYLOAD_SANITIZE_V1_END
+# GX430T_PACKAGE_PAYLOAD_SANITIZE_V2_END
 
+pkgbuild \
+  --root "$PKGROOT" \
+  --identifier "$IDENTIFIER" \
+  --version "$VERSION" \
+  --scripts "$ROOT/installer/scripts" \
+  --install-location / \
+  "$PKG"
+
+shasum -a 256 "$PKG" > "$PKG.sha256"
 echo "GX430T_PKG_BUILD_DONE=true"
 echo "PKG=$PKG"
 echo "SHA256=$PKG.sha256"
