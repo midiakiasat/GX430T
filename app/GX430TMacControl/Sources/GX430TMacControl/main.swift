@@ -2,6 +2,32 @@ import SwiftUI
 import AppKit
 import Foundation
 
+enum GX430TBrand {
+    static let repositoryURL = URL(string: "https://github.com/midiakiasat/GX430T")!
+    static let productName = "GX430T"
+    static let productSubtitle = "Professional label control"
+}
+
+struct GX430TLicenseFooter: View {
+    var compact = false
+
+    var body: some View {
+        Link(destination: GX430TBrand.repositoryURL) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.seal")
+                Text("Licence")
+                Text("·")
+                Text("GitHub")
+            }
+            .font(compact ? .caption2 : .caption)
+            .foregroundStyle(.tertiary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open GX430T licence and source repository")
+    }
+}
+
 enum GX430TConnectionMode: String {
     case local = "USB Host"
     case remote = "Network Client"
@@ -405,6 +431,48 @@ struct GX430TBrandMark: View {
     }
 }
 
+struct GX430TFormatSelector: View {
+    @Binding var selection: PrintKind
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(PrintKind.allCases) { kind in
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        selection = kind
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 12, weight: .semibold))
+
+                        Text(kind.rawValue)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(selection == kind ? Color.white : Color.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(selection == kind ? Color.accentColor : Color.clear)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(.quaternary.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Print format")
+    }
+}
+
 struct LabelPreview: View {
     let value: String
     let kind: PrintKind
@@ -547,9 +615,13 @@ struct QuickPrintView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Native GX430t control")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Native GX430T control")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    GX430TLicenseFooter(compact: true)
+                }
             }
             .padding(22)
             .navigationSplitViewColumnWidth(min: 230, ideal: 250, max: 280)
@@ -602,25 +674,40 @@ struct QuickPrintView: View {
                     }
                 }
 
-                Picker("Format", selection: $model.kind) {
-                    ForEach(PrintKind.allCases) { kind in
-                        Label(kind.rawValue, systemImage: kind.symbol)
-                            .tag(kind)
-                    }
-                }
-                .pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("FORMAT")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.9)
+                        .foregroundStyle(.secondary)
 
-                TextEditor(text: $model.value)
-                    .font(.system(size: 20, design: .rounded))
-                    .scrollContentBackground(.hidden)
-                    .padding(14)
-                    .frame(minHeight: 110, maxHeight: 150)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(.primary.opacity(0.1))
+                    GX430TFormatSelector(selection: $model.kind)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("Label content", systemImage: "square.and.pencil")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("\(model.value.count) characters")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
+
+                    TextEditor(text: $model.value)
+                        .font(.system(size: 19, weight: .medium, design: .rounded))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 96, maxHeight: 135)
+                }
+                .padding(16)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(.primary.opacity(0.09), lineWidth: 1)
+                }
 
                 LabelPreview(value: model.value, kind: model.kind)
 
@@ -663,6 +750,15 @@ struct QuickPrintView: View {
                 .padding(12)
                 .background(.quaternary.opacity(0.45))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                HStack {
+                    GX430TLicenseFooter()
+                    Spacer()
+                    Text("GX430T Mac Control")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 2)
             }
             .padding(30)
         }
@@ -912,13 +1008,7 @@ struct MenuBarContent: View {
                         }
                     }
 
-                Picker("Format", selection: $model.kind) {
-                    ForEach(PrintKind.allCases) { kind in
-                        Text(kind.rawValue).tag(kind)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                GX430TFormatSelector(selection: $model.kind)
 
                 HStack {
                     Stepper(value: $model.copies, in: 1...999) {
@@ -1049,6 +1139,9 @@ struct MenuBarContent: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
             }
+
+            GX430TLicenseFooter(compact: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .frame(width: 390)

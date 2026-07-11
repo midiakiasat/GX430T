@@ -1,6 +1,10 @@
 import SwiftUI
 import GX430TKit
 
+private enum GX430TiPhoneBrand {
+    static let repositoryURL = URL(string: "https://github.com/midiakiasat/GX430T")!
+}
+
 struct GX430TiPhoneRootView: View {
     @EnvironmentObject private var model: GX430TiPhoneModel
 
@@ -14,6 +18,7 @@ struct GX430TiPhoneRootView: View {
                     labelPreview
                     controls
                     resultCard
+                    licenceFooter
                 }
                 .padding()
             }
@@ -87,26 +92,74 @@ struct GX430TiPhoneRootView: View {
     }
 
     private var formatPicker: some View {
-        Picker("Format", selection: $model.kind) {
-            ForEach(GX430TPrintKind.allCases) { kind in
-                Label(kind.title, systemImage: kind.symbol)
-                    .tag(kind)
+        VStack(alignment: .leading, spacing: 9) {
+            Text("FORMAT")
+                .font(.caption2.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 5) {
+                ForEach(GX430TPrintKind.allCases) { kind in
+                    Button {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            model.kind = kind
+                        }
+                    } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: kind.symbol)
+                                .font(.system(size: 15, weight: .semibold))
+
+                            Text(kind.title)
+                                .font(.caption2.weight(.semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                        .foregroundStyle(model.kind == kind ? Color.white : Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .fill(model.kind == kind ? Color.accentColor : Color.clear)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(4)
+            .background(Color.secondary.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .pickerStyle(.segmented)
     }
 
     private var contentEditor: some View {
-        TextField(
-            "Type what you want to print",
-            text: $model.value,
-            axis: .vertical
-        )
-        .font(.title3)
-        .lineLimit(3...7)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Label content", systemImage: "square.and.pencil")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("\(model.value.count)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            TextField(
+                "Type what you want to print",
+                text: $model.value,
+                axis: .vertical
+            )
+            .font(.title3.weight(.medium))
+            .lineLimit(3...7)
+        }
         .padding()
         .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
     }
 
     private var labelPreview: some View {
@@ -231,6 +284,23 @@ struct GX430TiPhoneRootView: View {
         }
         .padding()
         .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var licenceFooter: some View {
+        Link(destination: GX430TiPhoneBrand.repositoryURL) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.seal")
+                Text("Licence")
+                Text("·")
+                Text("GitHub")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open GX430T licence and source repository")
     }
 }

@@ -83,3 +83,19 @@ bash -n "$ROOT/install/remove-updater-service.sh"
 test -x "$ROOT/scripts/verify-package-payload.sh"
 bash -n "$ROOT/scripts/verify-package-payload.sh"
 bash -n "$ROOT/installer/build-pkg.sh"
+
+
+# GX430T_UNIFIED_INTERFACE_VERIFY_V1
+grep -q 'struct GX430TLicenseFooter' \
+  "$ROOT/app/GX430TMacControl/Sources/GX430TMacControl/main.swift"
+
+grep -q 'struct GX430TFormatSelector' \
+  "$ROOT/app/GX430TMacControl/Sources/GX430TMacControl/main.swift"
+
+grep -q 'https://github.com/midiakiasat/GX430T' \
+  "$ROOT/app/GX430TMacControl/Sources/GX430TMacControl/main.swift"
+
+grep -q 'https://github.com/midiakiasat/GX430T' \
+  "$ROOT/ios/GX430TiPhone/Sources/GX430TiPhoneRootView.swift"
+
+test -f "$ROOT/docs/UNIFIED_INTERFACE.md"
