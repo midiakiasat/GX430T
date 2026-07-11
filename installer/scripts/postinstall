@@ -14,3 +14,10 @@ fi
 ln -sf /usr/local/gx430t/bin/gx430tctl /usr/local/bin/gx430tctl
 
 echo "GX430T_POSTINSTALL_DONE=true"
+
+# GX430T_UPDATER_INSTALL_LINKS_V1
+if [[ -x /usr/local/gx430t/bin/gx430t-update ]]; then
+  mkdir -p /usr/local/bin
+  ln -sfn     /usr/local/gx430t/bin/gx430t-update     /usr/local/bin/gx430t-update
+fi
+
