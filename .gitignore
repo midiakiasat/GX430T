@@ -11,5 +11,7 @@ release/*.md
 release/*.pkg
 release/*.pkg.sha256
 shared/GX430TKit/.build/
-
 app/GX430TMacControl/Resources/GX430TAppIcon.iconset/
+ios/GX430TiPhone/DerivedDataDevice/
+ios/GX430TiPhone/**/xcuserdata/
+shared/GX430TKit/.swiftpm/
