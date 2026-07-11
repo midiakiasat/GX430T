@@ -1,0 +1,17 @@
+{
+  "schema": "gx430t.live.remote_print_ledger_record.v1",
+  "product": "GX430T Mac Control",
+  "transport": "authenticated_client_to_print_host",
+  "job_id": "db2826d3-3a7c-4ffe-9e67-5a8e5d5d685b",
+  "print_kind": "code128",
+  "copies": 1,
+  "payload_sha256": "191efcf498cd6bb0102245a100a0f1c121f28f8a2408b62e6b85c1c24a8d60a5",
+  "success": true,
+  "result": "GX430T_CODE128_PRINT_SENT=true",
+  "duration_ms": 64,
+  "remote_address": "127.0.0.1",
+  "raw_payload_persisted": false,
+  "printer_queue": "GX430t",
+  "status": "REMOTE_PRINT_AND_LEDGER_VERIFIED",
+  "timestamp_utc": "2026-07-11T11:40:10Z"
+}
