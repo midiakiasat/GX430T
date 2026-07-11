@@ -7,7 +7,7 @@
   "bundle_identifier": "com.kaaffilm.gx430t.iphone",
   "simulator_udid": "E9DE23B6-F4B0-4677-8106-9350BBD0F0F2",
   "xcode_version": "Xcode 26.6 / Build version 17F113",
-  "source_head": "4b0840cc97fc7cae8dbfde95fa64750b6c5630f9",
+  "source_head": "bd0be2b04b3d5149685c47cf22c0da0b733f2ccc",
   "status": "IPHONE_SIMULATOR_BUILD_INSTALLED_AND_LAUNCHED",
-  "timestamp_utc": "2026-07-11T13:33:53Z"
+  "timestamp_utc": "2026-07-11T13:49:36Z"
 }
