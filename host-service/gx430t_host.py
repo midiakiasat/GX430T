@@ -343,7 +343,14 @@ class Handler(BaseHTTPRequestHandler):
                 "kind": kind,
                 "copies": copies,
                 "payloadHash": payload_hash,
+                "accepted": code == 0,
                 "success": code == 0,
+                "deliveryState": (
+                    "SUBMITTED_TO_CUPS"
+                    if code == 0
+                    else "SUBMISSION_FAILED"
+                ),
+                "physicalDeliveryVerified": False,
                 "result": output,
                 "durationMs": int((time.time() - started) * 1000),
                 "timestamp": int(time.time()),

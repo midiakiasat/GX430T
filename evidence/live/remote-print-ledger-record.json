@@ -12,6 +12,9 @@
   "remote_address": "127.0.0.1",
   "raw_payload_persisted": false,
   "printer_queue": "GX430t",
-  "status": "REMOTE_PRINT_AND_LEDGER_VERIFIED",
-  "timestamp_utc": "2026-07-11T11:40:10Z"
+  "status": "REMOTE_PRINT_SUBMISSION_AND_LEDGER_VERIFIED",
+  "timestamp_utc": "2026-07-11T11:40:10Z",
+  "submission_state": "SUBMITTED_TO_CUPS",
+  "physical_delivery_verified": false,
+  "boundary": "Authenticated submission to the USB host CUPS queue was verified. Physical label delivery remains an operator-observed hardware fact."
 }

@@ -56,3 +56,7 @@ grep -q "client-jobs" bin/gx430tctl
 grep -q "client-job-summary" bin/gx430tctl
 grep -q "GX430T_REMOTE_JOBS_READ" client/gx430t_client.py
 test -f docs/JOB_HISTORY.md
+
+test -f docs/UNIFIED_DEPLOYMENT.md
+grep -q "physicalDeliveryVerified" host-service/gx430t_host.py
+grep -q "SUBMITTED_TO_CUPS" host-service/gx430t_host.py
