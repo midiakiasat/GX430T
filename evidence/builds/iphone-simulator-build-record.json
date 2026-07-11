@@ -1,0 +1,13 @@
+{
+  "schema": "gx430t.iphone_build_record.v1",
+  "product": "GX430T",
+  "platform": "iOS Simulator",
+  "configuration": "Debug",
+  "app_path": "ios/GX430TiPhone/DerivedData/Build/Products/Debug-iphonesimulator/GX430T.app",
+  "bundle_identifier": "com.kaaffilm.gx430t.iphone",
+  "simulator_udid": "E9DE23B6-F4B0-4677-8106-9350BBD0F0F2",
+  "xcode_version": "Xcode 26.6 / Build version 17F113",
+  "source_head": "4b0840cc97fc7cae8dbfde95fa64750b6c5630f9",
+  "status": "IPHONE_SIMULATOR_BUILD_INSTALLED_AND_LAUNCHED",
+  "timestamp_utc": "2026-07-11T13:33:53Z"
+}
