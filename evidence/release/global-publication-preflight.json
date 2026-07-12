@@ -1,0 +1,89 @@
+{
+  "schema": "gx430t.global-publication-preflight.v1",
+  "generated_at": "2026-07-12T11:28:07.911142+00:00",
+  "repository": "midiakiasat/GX430T",
+  "source": {
+    "commit": "e5aac4b01f84e36b33100a2a853e56abdf6eb7c3",
+    "short_commit": "e5aac4b",
+    "head_tag": null,
+    "latest_tag": "v0.1.1"
+  },
+  "local_candidate": {
+    "package": "release/GX430T-Mac-Control-0.2.8.pkg",
+    "checksum": "release/GX430T-Mac-Control-0.2.8.pkg.sha256",
+    "sha256": "070d0841b11cd587f4307b421629b6e2797f55b602ee16124eaa00d7643b3def",
+    "checksum_verified": true
+  },
+  "current_release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/midiakiasat/GX430T/releases/assets/472442749",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-07-10T12:03:16Z",
+        "digest": "sha256:efdd8b6a03680213885ebb6b8a6dff548015a7aafb068ee7eab3707d8c9e7a88",
+        "downloadCount": 1,
+        "id": "RA_kwDOTTuoS84cKOd9",
+        "label": "",
+        "name": "GX430T-Mac-Control-0.1.1.pkg",
+        "size": 81669,
+        "state": "uploaded",
+        "updatedAt": "2026-07-10T12:03:17Z",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.1.1/GX430T-Mac-Control-0.1.1.pkg"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/midiakiasat/GX430T/releases/assets/472442748",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-07-10T12:03:16Z",
+        "digest": "sha256:0db7ddd88b9ee5ebf6f63a7a2414195e492bf5382654cd469cc19b0d98b2564e",
+        "downloadCount": 1,
+        "id": "RA_kwDOTTuoS84cKOd8",
+        "label": "",
+        "name": "GX430T-Mac-Control-0.1.1.pkg.sha256",
+        "size": 156,
+        "state": "uploaded",
+        "updatedAt": "2026-07-10T12:03:16Z",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.1.1/GX430T-Mac-Control-0.1.1.pkg.sha256"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": false,
+    "name": "GX430T Mac Control 0.1.1",
+    "publishedAt": "2026-07-10T12:03:17Z",
+    "tagName": "v0.1.1",
+    "url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.1.1"
+  },
+  "release_assets": {
+    "macos_pkg": true,
+    "macos_sha256": true,
+    "colleague_quickstart": false,
+    "presentation": false
+  },
+  "signing": {
+    "developer_id_application": null,
+    "developer_id_installer": null,
+    "apple_development": "Apple Development: midia.kiasat@gmail.com (JKJ6LG8T44)",
+    "notary_profile": null
+  },
+  "publication_obligations": {
+    "head_has_release_tag": false,
+    "local_package_present": true,
+    "local_checksum_present": true,
+    "local_checksum_verified": true,
+    "developer_id_application_present": false,
+    "developer_id_installer_present": false,
+    "notary_profile_present": false,
+    "latest_release_contains_pkg": true,
+    "latest_release_contains_sha256": true,
+    "latest_release_contains_quickstart": false,
+    "latest_release_contains_presentation": false
+  },
+  "missing": [
+    "head_has_release_tag",
+    "developer_id_application_present",
+    "developer_id_installer_present",
+    "notary_profile_present",
+    "latest_release_contains_quickstart",
+    "latest_release_contains_presentation"
+  ],
+  "publication_ready": false
+}
