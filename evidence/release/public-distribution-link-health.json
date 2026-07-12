@@ -1,0 +1,94 @@
+{
+  "schema": "gx430t.public-distribution-link-health.v1",
+  "verified_at": "2026-07-12T14:37:47.743619+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "c2de4c3d52ccedfb2e228e3d15df41b89211f34f",
+  "public_release": {
+    "tag": "v0.2.8-work1",
+    "name": "GX430T Workplace Presentation Pack 0.2.8",
+    "url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.2.8-work1",
+    "published_at": "2026-07-12T13:46:30Z",
+    "is_draft": false,
+    "is_prerelease": true,
+    "release_page_http_verified": true,
+    "assets": [
+      {
+        "name": "COLLEAGUE_QUICKSTART.md",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/COLLEAGUE_QUICKSTART.md",
+        "expected_size": 1697,
+        "downloaded_size": 1697,
+        "sha256": "921aa9b2602b86289776cdc1b087ea05ab7a9261bb58448a9bb1593c61c386a4",
+        "http_download_verified": true
+      },
+      {
+        "name": "DOWNLOADS.md",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/DOWNLOADS.md",
+        "expected_size": 1561,
+        "downloaded_size": 1561,
+        "sha256": "c90288087d1dc1d182608399412e64880d9d11c81f8155286145477b58e3c790",
+        "http_download_verified": true
+      },
+      {
+        "name": "GX430T-Colleague-Presentation-0.2.8.zip",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/GX430T-Colleague-Presentation-0.2.8.zip",
+        "expected_size": 28236,
+        "downloaded_size": 28236,
+        "sha256": "4e02021de3155ea0967d374e18659624d5a56fca890410256a2d44825a186215",
+        "http_download_verified": true
+      },
+      {
+        "name": "GX430T-Colleague-Presentation-0.2.8.zip.sha256",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/GX430T-Colleague-Presentation-0.2.8.zip.sha256",
+        "expected_size": 106,
+        "downloaded_size": 106,
+        "sha256": "214ed974ddee84ab10752bebd098a4b5fbedb5af98c3de0eab4d1cc8d78ddaf9",
+        "http_download_verified": true
+      },
+      {
+        "name": "GX430T-Download-Links-0.2.8.md",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/GX430T-Download-Links-0.2.8.md",
+        "expected_size": 1127,
+        "downloaded_size": 1127,
+        "sha256": "5608e4ca83408c081fcdd1ce0f7f520cb17c014bcd96535550ce05a6e3863093",
+        "http_download_verified": true
+      },
+      {
+        "name": "GX430T-Work-Presentation-0.2.8.html",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/GX430T-Work-Presentation-0.2.8.html",
+        "expected_size": 3674,
+        "downloaded_size": 3674,
+        "sha256": "91850b00ed8d47be73c630a36c8d4c17f82a9424e56f27b0893c74b9998824dd",
+        "http_download_verified": true
+      },
+      {
+        "name": "GX430T-Work-Presentation-0.2.8.pdf",
+        "url": "https://github.com/midiakiasat/GX430T/releases/download/v0.2.8-work1/GX430T-Work-Presentation-0.2.8.pdf",
+        "expected_size": 29721,
+        "downloaded_size": 29721,
+        "sha256": "71c6e0b4811e15a78bd00f0d042080340919c03596dc4b24e993d0ef8caafff4",
+        "http_download_verified": true
+      }
+    ],
+    "asset_count": 7,
+    "missing_required_assets": []
+  },
+  "presentation_pdf": {
+    "filename": "GX430T-Work-Presentation-0.2.8.pdf",
+    "pages": 1,
+    "header_verified": true,
+    "eof_marker_verified": true,
+    "native_validation_passed": true
+  },
+  "presentation_bundle_checksum_verified": true,
+  "production_distribution_candidate": {
+    "tag": "v0.2.8-rc1",
+    "url": "https://github.com/midiakiasat/GX430T/releases/tag/untagged-37165fe616fef360b6b1",
+    "is_draft": true,
+    "is_prerelease": true,
+    "asset_count": 15,
+    "remains_unpublished": true
+  },
+  "public_presentation_ready": true,
+  "production_macos_package_publicly_authorized": false,
+  "global_iphone_ipa_publicly_authorized": false
+}
