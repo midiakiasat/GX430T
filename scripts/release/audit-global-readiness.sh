@@ -43,48 +43,77 @@ CI_SOURCE=false
 PRODUCT_VERIFY=false
 IPHONE_EVIDENCE=false
 
-exists_dir macos && MAC_APP_SOURCE=true
+source_grep() {
+  local pattern="$1"
+  shift
+
+  grep -RIlE "$pattern" \
+    --include='*.swift' \
+    --include='*.sh' \
+    --include='*.yml' \
+    --include='*.yaml' \
+    --include='*.plist' \
+    --include='*.json' \
+    "$@" 2>/dev/null \
+    | grep -vE '/\.git/|/DerivedData|/build/|/pkgroot/|/\.swiftpm/' \
+    | grep -q .
+}
+
+if [[ -f app/GX430TMacControl/Sources/GX430TMacControl/main.swift ]] \
+  && source_grep 'import AppKit|NSApplication|@main|WindowGroup' app/GX430TMacControl; then
+  MAC_APP_SOURCE=true
+fi
+
 exists_dir ios/GX430TiPhone && IPHONE_APP_SOURCE=true
 
-if find . -type f \( -iname '*MenuBar*.swift' -o -iname '*StatusBar*.swift' -o -iname '*MenuExtra*.swift' \) \
-  -not -path './.git/*' \
-  -not -path '*/DerivedData*/*' \
-  | grep -q .; then
+if source_grep \
+  'MenuBarExtra|NSStatusItem|NSStatusBar|statusItem|menu bar|menubar' \
+  app/GX430TMacControl; then
   MENUBAR_SOURCE=true
 fi
 
-if exists_dir installer || find . -type f \( -name '*.pkgproj' -o -name 'build-pkg.sh' \) \
-  -not -path './.git/*' | grep -q .; then
+if [[ -f installer/build-pkg.sh ]] \
+  && [[ -f installer/scripts/preinstall ]] \
+  && [[ -f installer/scripts/postinstall ]]; then
   MAC_INSTALLER_SOURCE=true
 fi
 
-if find .github/workflows -type f 2>/dev/null \
-  | xargs grep -IlE 'notarytool|notariz|codesign|productsign' 2>/dev/null \
-  | grep -q .; then
+if [[ -f release-tools/build-signed-notarized-macos.sh ]] \
+  && [[ -f release-tools/audit-macos-distribution.sh ]] \
+  && source_grep \
+    'notarytool|notariz|codesign|productsign|stapler' \
+    release-tools .github/workflows; then
   SIGNED_RELEASE_PIPELINE=true
 fi
 
-if find . -type f \
-  -not -path './.git/*' \
-  -not -path '*/DerivedData*/*' \
-  | xargs grep -IlE 'Sparkle|SUUpdater|automatic updater|update manifest|appcast' 2>/dev/null \
-  | grep -q .; then
+if [[ -s updater/run-update-check.sh ]] \
+  && [[ -s install/install-updater-service.sh ]] \
+  && [[ -s install/remove-updater-service.sh ]] \
+  && [[ -s docs/AUTOMATIC_UPDATER.md ]] \
+  && grep -Eiq \
+    'release|version|update|download|checksum|sha256|pkg|github|curl|gh ' \
+    updater/run-update-check.sh \
+    install/install-updater-service.sh \
+    install/remove-updater-service.sh \
+    docs/AUTOMATIC_UPDATER.md; then
   UPDATER_SOURCE=true
 fi
 
-if find . -type f \
-  -not -path './.git/*' \
-  -not -path '*/DerivedData*/*' \
-  | xargs grep -IlE 'pairing code|pairingCode|GX430T Pairing|six-digit pairing|Print Host' 2>/dev/null \
-  | grep -q .; then
+if [[ -f ios/GX430TiPhone/Sources/GX430TPairingView.swift ]] \
+  && [[ -f ios/GX430TiPhone/Sources/GX430TiPhoneModel.swift ]] \
+  && [[ -f shared/GX430TKit/Sources/GX430TKit/GX430TKit.swift ]] \
+  && source_grep \
+    'pairing|pairingCode|pairing code|six-digit|six digit|paired' \
+    ios/GX430TiPhone shared/GX430TKit app/GX430TMacControl; then
   PAIRING_SOURCE=true
 fi
 
-if find . -type f \
-  -not -path './.git/*' \
-  -not -path '*/DerivedData*/*' \
-  | xargs grep -IlE 'IPP|CUPS|print host|PrintHost|lpr -P|printer sharing' 2>/dev/null \
-  | grep -q .; then
+if [[ -d host-service ]] \
+  && [[ -f install/install-host-service.sh ]] \
+  && [[ -f install/remove-host-service.sh ]] \
+  && source_grep \
+    'Print Host|print-host|print host|NWListener|HTTPServer|IPP|CUPS|lpr -P' \
+    host-service install app/GX430TMacControl shared/GX430TKit; then
   PRINT_HOST_SOURCE=true
 fi
 

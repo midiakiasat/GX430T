@@ -6,23 +6,23 @@ This document is generated from repository and GitHub release evidence.
 
 - Repository: `midiakiasat/GX430T`
 - Branch: `main`
-- Commit: `79b1c8171f4ed44d96cdb56b7d364c61c80eb05a`
-- Readiness score: **12/18**
-- Percentage: **66.67%**
-- Global release ready: **NO**
+- Commit: `f1ec6f35df5a3e233992591d0721866559286b28`
+- Readiness score: **18/18**
+- Percentage: **100.0%**
+- Global release ready: **YES**
 
 ## Product surfaces
 
 | Result | Surface |
 | --- | --- |
-| MISSING | Native macOS application source |
+| PASS | Native macOS application source |
 | PASS | Native iPhone application source |
-| MISSING | macOS menu-bar control source |
+| PASS | macOS menu-bar control source |
 | PASS | macOS installer source |
-| MISSING | Signing and notarization pipeline |
-| MISSING | Automatic updater source |
-| MISSING | Mac and iPhone pairing source |
-| MISSING | Mac print-host source |
+| PASS | Signing and notarization pipeline |
+| PASS | Automatic updater source |
+| PASS | Mac and iPhone pairing source |
+| PASS | Mac print-host source |
 | PASS | Command-line control surface |
 | PASS | Apache-2.0 licence |
 | PASS | Repository README |
@@ -36,12 +36,7 @@ This document is generated from repository and GitHub release evidence.
 
 ## Missing release obligations
 
-- `mac_app_source`
-- `menu_bar_source`
-- `signed_release_pipeline`
-- `automatic_updater_source`
-- `pairing_source`
-- `print_host_source`
+- None
 
 ## Current release
 
