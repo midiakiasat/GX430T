@@ -1,0 +1,47 @@
+{
+  "schema": "gx430t.global-release-readiness.v1",
+  "generated_at": "2026-07-12T10:50:18.836517+00:00",
+  "repository": "midiakiasat/GX430T",
+  "branch": "main",
+  "commit": "79b1c8171f4ed44d96cdb56b7d364c61c80eb05a",
+  "score": {
+    "passed": 12,
+    "total": 18,
+    "percentage": 66.67
+  },
+  "checks": {
+    "mac_app_source": false,
+    "iphone_app_source": true,
+    "menu_bar_source": false,
+    "mac_installer_source": true,
+    "signed_release_pipeline": false,
+    "automatic_updater_source": false,
+    "pairing_source": false,
+    "print_host_source": false,
+    "cli_source": true,
+    "license_present": true,
+    "readme_present": true,
+    "colleague_quickstart_present": true,
+    "downloads_guide_present": true,
+    "work_presentation_present": true,
+    "ci_present": true,
+    "product_verification_passed": true,
+    "iphone_visual_evidence_present": true,
+    "github_release_present": true
+  },
+  "missing": [
+    "mac_app_source",
+    "menu_bar_source",
+    "signed_release_pipeline",
+    "automatic_updater_source",
+    "pairing_source",
+    "print_host_source"
+  ],
+  "release": {
+    "latest_tag": "v0.1.1",
+    "latest_release_url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.1.1",
+    "latest_release_name": "GX430T Mac Control 0.1.1",
+    "latest_release_published_at": "2026-07-10T12:03:17Z"
+  },
+  "global_release_ready": false
+}

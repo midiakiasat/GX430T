@@ -188,8 +188,24 @@ Install a colleague client queue:
 bash install/install-client-shared-printer.sh 192.168.0.158
 ```
 
+## Global distribution
+
+Official project links:
+
+- Repository: `https://github.com/midiakiasat/GX430T`
+- Latest release: `https://github.com/midiakiasat/GX430T/releases/latest`
+- Colleague quick start: [`docs/distribution/COLLEAGUE_QUICKSTART.md`](docs/distribution/COLLEAGUE_QUICKSTART.md)
+- Download guide: [`docs/distribution/DOWNLOADS.md`](docs/distribution/DOWNLOADS.md)
+- Workplace presentation: [`docs/presentation/GX430T_WORK_PRESENTATION.md`](docs/presentation/GX430T_WORK_PRESENTATION.md)
+- Global deployment boundary: [`docs/distribution/GLOBAL_DEPLOYMENT_BOUNDARY.md`](docs/distribution/GLOBAL_DEPLOYMENT_BOUNDARY.md)
+- Release readiness: [`docs/GLOBAL_RELEASE_READINESS.md`](docs/GLOBAL_RELEASE_READINESS.md)
+
+Global distribution applies to the software, documentation, and signed release
+artifacts. The physical printer and Print Host remain private to the approved
+workplace network.
+
 ## Product maturity reading
 
-Current repository status: product foundation.
+Current repository status is measured by the generated global release readiness report.
 
 This repo now establishes the installable product boundary, CLI contract, ZPL profiles, installer scripts, diagnostics, and release gate. Native SwiftUI implementation and packaged updater are downstream implementation work, not prerequisites for the product boundary to be clear.
