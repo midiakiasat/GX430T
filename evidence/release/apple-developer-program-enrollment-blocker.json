@@ -1,0 +1,33 @@
+{
+  "schema": "gx430t.apple-developer-program-enrollment-blocker.v1",
+  "recorded_at": "2026-07-12T16:21:32.275093+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "3037d291d5a3b29f276c24c019d544d21179d650",
+  "portal_status": {
+    "access_available": false,
+    "reported_message": "Access Unavailable",
+    "enrolled_program_authority_confirmed": false,
+    "organization_team_membership_confirmed": false
+  },
+  "local_authority": {
+    "apple_development_present": true,
+    "developer_id_application_present": false,
+    "developer_id_installer_present": false,
+    "notary_profile_present": false
+  },
+  "csr": {
+    "filename": "GX430T-Developer-ID.certSigningRequest",
+    "sha256": "ab185dc94ce3566dc224578a14916f962a1c163561d9016fc5371ca658908965",
+    "valid": true,
+    "stored_outside_repository": true
+  },
+  "required_resolution": [
+    "enroll_apple_account_in_apple_developer_program_or_join_enrolled_team",
+    "issue_developer_id_application_certificate",
+    "issue_developer_id_installer_certificate",
+    "configure_gx430t_notary_profile"
+  ],
+  "public_workplace_presentation_authorized": true,
+  "production_macos_distribution_authorized": false,
+  "production_release_authorized": false
+}
