@@ -1,0 +1,12 @@
+{
+  "schema": "gx430t.colleague-distribution-kit.v1",
+  "generated_at": "2026-07-12T11:36:20.914556+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "524d87339c83a3c0683770bce2d303861061fa07",
+  "tag": "v0.2.8-rc1",
+  "archive": "release/GX430T-Colleague-Kit-0.2.8.zip",
+  "checksum_file": "release/GX430T-Colleague-Kit-0.2.8.zip.sha256",
+  "sha256": "e6d77f2b30ac527a4bbba8716b7cc59a59df7c2574eda67e8c1b8e9a5ea37696",
+  "draft_prerelease": true,
+  "global_production_release": false
+}
