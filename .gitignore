@@ -25,3 +25,8 @@ shared/GX430TKit/.swiftpm/
 release/GX430T-Colleague-Kit-*/
 release/GX430T-Colleague-Kit-*.zip
 release/GX430T-Colleague-Kit-*.zip.sha256
+
+# Generated GX430T colleague presentation artifacts
+release/GX430T-Colleague-Presentation-*/
+release/GX430T-Colleague-Presentation-*.zip
+release/GX430T-Colleague-Presentation-*.zip.sha256
