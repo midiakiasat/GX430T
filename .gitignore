@@ -20,3 +20,8 @@ release/*.pkg
 release/*.pkg.sha256
 shared/GX430TKit/.build/
 shared/GX430TKit/.swiftpm/
+
+# GX430T generated colleague distribution artifacts
+release/GX430T-Colleague-Kit-*/
+release/GX430T-Colleague-Kit-*.zip
+release/GX430T-Colleague-Kit-*.zip.sha256
