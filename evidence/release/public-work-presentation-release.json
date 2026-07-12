@@ -1,0 +1,24 @@
+{
+  "schema": "gx430t.public-work-presentation-release.v1",
+  "tag": "v0.2.8-work1",
+  "name": "GX430T Workplace Presentation Pack 0.2.8",
+  "url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.2.8-work1",
+  "published_at": "2026-07-12T13:46:30Z",
+  "is_draft": false,
+  "is_prerelease": true,
+  "assets": [
+    "COLLEAGUE_QUICKSTART.md",
+    "DOWNLOADS.md",
+    "GX430T-Colleague-Presentation-0.2.8.zip",
+    "GX430T-Colleague-Presentation-0.2.8.zip.sha256",
+    "GX430T-Download-Links-0.2.8.md",
+    "GX430T-Work-Presentation-0.2.8.html",
+    "GX430T-Work-Presentation-0.2.8.pdf"
+  ],
+  "asset_count": 7,
+  "missing_assets": [],
+  "documentation_only": true,
+  "macos_production_package_published_here": false,
+  "iphone_global_ipa_published_here": false,
+  "public_work_presentation_ready": true
+}
