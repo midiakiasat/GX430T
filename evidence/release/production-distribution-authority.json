@@ -1,0 +1,39 @@
+{
+  "schema": "gx430t.production-distribution-authority.v1",
+  "generated_at": "2026-07-12T14:49:55.954681+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "14b929460dc73765e08c4f47e7cb19ce937b7560",
+  "checks": {
+    "developer_id_application_present": false,
+    "developer_id_installer_present": false,
+    "notary_profile_present": false,
+    "apple_development_present": true,
+    "signed_notarized_pipeline_source_present": true,
+    "production_package_payload_valid": true,
+    "production_package_checksum_valid": true,
+    "public_presentation_release_published": true,
+    "production_candidate_remains_draft": true
+  },
+  "missing_authorities": [
+    "developer_id_application_present",
+    "developer_id_installer_present",
+    "notary_profile_present"
+  ],
+  "notary_profile_name": null,
+  "public_presentation_release": {
+    "tag": "v0.2.8-work1",
+    "name": "GX430T Workplace Presentation Pack 0.2.8",
+    "url": "https://github.com/midiakiasat/GX430T/releases/tag/v0.2.8-work1",
+    "published_at": "2026-07-12T13:46:30Z",
+    "asset_count": 7
+  },
+  "production_candidate": {
+    "tag": "v0.2.8-rc1",
+    "name": "GX430T Global Distribution Candidate 0.2.8",
+    "url": "https://github.com/midiakiasat/GX430T/releases/tag/untagged-37165fe616fef360b6b1",
+    "is_draft": true,
+    "asset_count": 15
+  },
+  "production_distribution_ready": false,
+  "production_release_authorized": false
+}
