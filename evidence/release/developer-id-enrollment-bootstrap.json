@@ -1,0 +1,28 @@
+{
+  "schema": "gx430t.developer-id-enrollment-bootstrap.v1",
+  "generated_at": "2026-07-12T15:13:34.811733+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "5369b05e148fe88924808a1a8e1f01711965da60",
+  "csr": {
+    "filename": "GX430T-Developer-ID.certSigningRequest",
+    "sha256": "ab185dc94ce3566dc224578a14916f962a1c163561d9016fc5371ca658908965",
+    "valid": true,
+    "stored_outside_repository": true
+  },
+  "private_key": {
+    "security_import_reported_success": true,
+    "imported_key_count": 1,
+    "target_keychain": "login.keychain-db",
+    "temporary_private_key_file_destroyed": true,
+    "committed_to_repository": false,
+    "usable_signing_identity_pending_matching_certificate": true
+  },
+  "required_authorities": {
+    "developer_id_application_present": false,
+    "developer_id_installer_present": false,
+    "notary_profile_present": false
+  },
+  "required_notary_profile": "GX430T_NOTARY",
+  "apple_certificate_portal_action_required": true,
+  "production_release_authorized": false
+}
