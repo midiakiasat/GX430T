@@ -1,0 +1,43 @@
+{
+  "schema": "gx430t.work-presentation-distribution.v1",
+  "generated_at": "2026-07-12T13:33:45.853215+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "1e9e7622bdfab300a26f947dab490a5cc722e41b",
+  "tag": "v0.2.8-rc1",
+  "version": "0.2.8",
+  "release_name": "GX430T Global Distribution Candidate 0.2.8",
+  "release_url": "https://github.com/midiakiasat/GX430T/releases/tag/untagged-37165fe616fef360b6b1",
+  "draft": true,
+  "prerelease": true,
+  "asset_count": 15,
+  "assets": [
+    "COLLEAGUE_QUICKSTART.md",
+    "DOWNLOADS.md",
+    "GLOBAL_DEPLOYMENT_BOUNDARY.md",
+    "GX430T-Colleague-Kit-0.2.8.zip",
+    "GX430T-Colleague-Kit-0.2.8.zip.sha256",
+    "GX430T-Colleague-Presentation-0.2.8.zip",
+    "GX430T-Colleague-Presentation-0.2.8.zip.sha256",
+    "GX430T-Download-Links-0.2.8.md",
+    "GX430T-Mac-Control-0.2.8.pkg",
+    "GX430T-Mac-Control-0.2.8.pkg.sha256",
+    "GX430T-Work-Presentation-0.2.8.html",
+    "GX430T-Work-Presentation-0.2.8.pdf",
+    "GX430T_WORK_PRESENTATION.md",
+    "global-publication-preflight.json",
+    "global-release-readiness.json"
+  ],
+  "required_assets": [
+    "GX430T-Work-Presentation-0.2.8.pdf",
+    "GX430T-Work-Presentation-0.2.8.html",
+    "GX430T-Download-Links-0.2.8.md",
+    "GX430T-Colleague-Presentation-0.2.8.zip",
+    "GX430T-Colleague-Presentation-0.2.8.zip.sha256"
+  ],
+  "missing_assets": [],
+  "presentation_ready": true,
+  "physical_printer_public": false,
+  "cups_queue_public": false,
+  "pairing_service_public": false,
+  "print_host_public": false
+}
