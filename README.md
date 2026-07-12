@@ -188,6 +188,20 @@ Install a colleague client queue:
 bash install/install-client-shared-printer.sh 192.168.0.158
 ```
 
+## Workplace presentation downloads
+
+The public GX430T workplace presentation pack is available from:
+
+- [GX430T Workplace Presentation Pack 0.2.8](https://github.com/midiakiasat/GX430T/releases/tag/v0.2.8-work1)
+- [Public workplace download guide](docs/distribution/PUBLIC_WORKPLACE_DOWNLOADS.md)
+
+The published pack contains the PDF presentation, HTML presentation, colleague
+quick start, download links, and presentation bundle.
+
+The production macOS installer remains outside this public presentation release
+until Developer ID signing, notarization, clean-machine installation, pairing,
+and physical print acceptance are complete.
+
 ## Global distribution
 
 Official project links:
