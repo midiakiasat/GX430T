@@ -12,6 +12,8 @@
 		8DDD859CD0DFE7654B0B3A72 /* GX430TiPhoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BEDC5ED3C372F87CEBF23A /* GX430TiPhoneTests.swift */; };
 		998A0E3F786D80556C3489D6 /* GX430TiPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */; };
 		A95A938A5B23322EA94C0BFB /* GX430TiPhoneRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */; };
+		B922D916410ADCD315713F95 /* GX430TBrandHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E520064F2E2BF410F3BE1D /* GX430TBrandHeader.swift */; };
+		C9F9DCBCB0AD8A4D0920ECE8 /* GX430TBrandAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 82AEF159330839505C11258F /* GX430TBrandAssets.xcassets */; };
 		E05085EA1E6B2742AE158977 /* GX430TiPhoneModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -33,6 +35,8 @@
 		5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneRootView.swift; sourceTree = "<group>"; };
 		56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneApp.swift; sourceTree = "<group>"; };
 		789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TiPhoneModel.swift; sourceTree = "<group>"; };
+		82AEF159330839505C11258F /* GX430TBrandAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = GX430TBrandAssets.xcassets; sourceTree = "<group>"; };
+		C0E520064F2E2BF410F3BE1D /* GX430TBrandHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GX430TBrandHeader.swift; sourceTree = "<group>"; };
 		EC38B98623FD19954B09964B /* GX430TKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GX430TKit; path = ../../shared/GX430TKit; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -68,6 +72,8 @@
 		8828F8274F135FF69427EC2B /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				82AEF159330839505C11258F /* GX430TBrandAssets.xcassets */,
+				C0E520064F2E2BF410F3BE1D /* GX430TBrandHeader.swift */,
 				56E17E79784B60C2055AF98A /* GX430TiPhoneApp.swift */,
 				789EDFE24D87360634C4C340 /* GX430TiPhoneModel.swift */,
 				5440E7F30F819854E4B057E4 /* GX430TiPhoneRootView.swift */,
@@ -120,6 +126,7 @@
 			buildConfigurationList = E19F1F33C399C1819959D01C /* Build configuration list for PBXNativeTarget "GX430TiPhone" */;
 			buildPhases = (
 				15D339ABE3253FBCA886C130 /* Sources */,
+				6DF26B88A9DEC66A202F1361 /* Resources */,
 				B5AB86AB86B911B1E927CC8B /* Frameworks */,
 			);
 			buildRules = (
@@ -172,11 +179,23 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		6DF26B88A9DEC66A202F1361 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C9F9DCBCB0AD8A4D0920ECE8 /* GX430TBrandAssets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		15D339ABE3253FBCA886C130 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B922D916410ADCD315713F95 /* GX430TBrandHeader.swift in Sources */,
 				78C6B1D07DF720F2434995CC /* GX430TPairingView.swift in Sources */,
 				998A0E3F786D80556C3489D6 /* GX430TiPhoneApp.swift in Sources */,
 				E05085EA1E6B2742AE158977 /* GX430TiPhoneModel.swift in Sources */,
