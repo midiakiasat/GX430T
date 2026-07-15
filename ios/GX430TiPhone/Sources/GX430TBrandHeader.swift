@@ -4,40 +4,40 @@ struct GX430TBrandHeader: View {
     var compact = false
 
     var body: some View {
-        HStack(spacing: compact ? 12 : 16) {
-            Image("GX430TLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: compact ? 46 : 58,
-                    height: compact ? 46 : 58
-                )
-                .accessibilityLabel("GX430T logo")
+        HStack(spacing: compact ? 12 : 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: compact ? 14 : 17, style: .continuous)
+                    .fill(.primary.opacity(0.06))
 
-            VStack(alignment: .leading, spacing: 3) {
+                Image("GX430TLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(compact ? 8 : 10)
+            }
+            .frame(
+                width: compact ? 46 : 54,
+                height: compact ? 46 : 54
+            )
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text("GX430T")
                     .font(
                         compact
-                            ? .title2.weight(.black)
-                            : .largeTitle.weight(.black)
+                            ? .title3.weight(.black)
+                            : .title2.weight(.black)
                     )
 
-                Text("MAC + IPHONE LABEL CONTROL")
+                Text("PRIVATE LABEL CONTROL")
                     .font(.caption2.weight(.bold))
-                    .tracking(1.1)
+                    .tracking(1.2)
                     .foregroundStyle(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
         }
-        .padding(compact ? 14 : 18)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.thinMaterial)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .padding(.horizontal, compact ? 2 : 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("GX430T private label control")
     }
 }

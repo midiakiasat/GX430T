@@ -19,6 +19,22 @@ targets:
       - path: Resources
     info:
       path: Resources/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)"
+        CFBundleDisplayName: GX430T
+        CFBundleExecutable: "$(EXECUTABLE_NAME)"
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: "$(PRODUCT_NAME)"
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSLocalNetworkUsageDescription: GX430T connects privately to the work Mac that controls the Zebra label printer.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kaaffilm.gx430t.iphone
@@ -27,8 +43,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""
-        CURRENT_PROJECT_VERSION: "1"
-        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "28"
+        MARKETING_VERSION: "0.2.8"
         GENERATE_INFOPLIST_FILE: NO
         SUPPORTS_MACCATALYST: NO
     dependencies:
