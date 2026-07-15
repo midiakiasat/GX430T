@@ -1,0 +1,34 @@
+{
+  "schema": "gx430t.unified-product-authority.v3",
+  "recorded_at": "2026-07-15T08:06:39.634279+00:00",
+  "repository": "midiakiasat/GX430T",
+  "source_commit": "42ea9a3407e0ebbf7da4268c0828a1c49336c568",
+  "product": {
+    "name": "GX430T",
+    "marketing_version": "0.2.8",
+    "build_number": "28",
+    "protocol_version": 1,
+    "host_port": 43043
+  },
+  "surfaces": {
+    "mac_application": true,
+    "mac_menu_bar": true,
+    "iphone_application": true,
+    "shared_network_contract": true,
+    "authoritative_print_host": true
+  },
+  "legacy_state": {
+    "temporary_port_8430_present": false,
+    "generated_iphone_build_in_macos_package": false,
+    "derived_data_in_macos_package": false
+  },
+  "macos_package": {
+    "filename": "GX430T-Mac-Control-0.2.8.pkg",
+    "sha256": "32eb2e7ebbec7e4b306e87cceab7be4e00c61358df1bf80c036914eca49f2952",
+    "canonical_sources_only": true,
+    "private_installable": true,
+    "developer_id_signed": false,
+    "notarized": false,
+    "global_distribution_authorized": false
+  }
+}

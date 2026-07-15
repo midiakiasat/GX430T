@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>GX430T Mac Control</string>
+	<string>GX430T</string>
 	<key>CFBundleExecutable</key>
 	<string>GX430TMacControl</string>
 	<key>CFBundleIconFile</key>
@@ -11,13 +11,13 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.kaaffilm.gx430t.mac-control.app</string>
 	<key>CFBundleName</key>
-	<string>GX430T Mac Control</string>
+	<string>GX430T</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.2.8</string>
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>28</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>

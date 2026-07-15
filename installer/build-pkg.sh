@@ -8,55 +8,103 @@ PKGROOT="$ROOT/installer/pkgroot"
 RELEASE="$ROOT/release"
 PKG="$RELEASE/GX430T-Mac-Control-$VERSION.pkg"
 
-sudo chown -R "$(id -un)":"$(id -gn)" "$ROOT/app/GX430TMacControl" "$PKGROOT" "$RELEASE" 2>/dev/null || true
-sudo chmod -R u+rwX "$ROOT/app/GX430TMacControl" "$PKGROOT" "$RELEASE" 2>/dev/null || true
+sudo chown -R \
+  "$(id -un)":"$(id -gn)" \
+  "$ROOT/app/GX430TMacControl" \
+  "$ROOT/installer" \
+  "$RELEASE" \
+  2>/dev/null || true
+
+sudo chmod -R \
+  u+rwX \
+  "$ROOT/app/GX430TMacControl" \
+  "$ROOT/installer" \
+  "$RELEASE" \
+  2>/dev/null || true
+
 rm -rf "$PKGROOT"
 
-mkdir -p "$PKGROOT/usr/local/gx430t" "$PKGROOT/usr/local/bin" "$PKGROOT/Applications" "$RELEASE"
+mkdir -p \
+  "$PKGROOT/usr/local/gx430t" \
+  "$PKGROOT/usr/local/bin" \
+  "$PKGROOT/Applications" \
+  "$RELEASE"
 
 rsync -a \
-  --exclude ".git" \
-  --exclude "release" \
-  --exclude "installer/pkgroot" \
-  --exclude "app/GX430TMacControl/build" \
-  "$ROOT/" "$PKGROOT/usr/local/gx430t/"
+  --exclude '.git' \
+  --exclude '.DS_Store' \
+  --exclude 'release' \
+  --exclude 'installer/pkgroot' \
+  --exclude 'app/GX430TMacControl/build' \
+  --exclude 'DerivedData*' \
+  --exclude '**/DerivedData*' \
+  --exclude '**/build' \
+  --exclude '**/.build' \
+  --exclude '**/.swiftpm' \
+  --exclude '**/xcuserdata' \
+  --exclude '*.xcuserstate' \
+  --exclude '__preview.dylib' \
+  --exclude '*.debug.dylib' \
+  "$ROOT/" \
+  "$PKGROOT/usr/local/gx430t/"
 
 bash "$ROOT/app/GX430TMacControl/build-app.sh"
 
-rsync -a "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" "$PKGROOT/usr/local/gx430t/"
-rsync -a "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" "$PKGROOT/Applications/"
+rsync -a \
+  "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" \
+  "$PKGROOT/usr/local/gx430t/"
 
-chmod +x "$PKGROOT/usr/local/gx430t/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
-chmod +x "$PKGROOT/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
-chmod +x "$PKGROOT/usr/local/gx430t/bin/gx430tctl"
-chmod +x "$PKGROOT/usr/local/gx430t/scripts/"*.sh
-chmod +x "$PKGROOT/usr/local/gx430t/install/"*.sh
+rsync -a \
+  "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" \
+  "$PKGROOT/Applications/"
 
-ln -sf /usr/local/gx430t/bin/gx430tctl "$PKGROOT/usr/local/bin/gx430tctl"
+chmod +x \
+  "$PKGROOT/usr/local/gx430t/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl" \
+  "$PKGROOT/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl" \
+  "$PKGROOT/usr/local/gx430t/bin/gx430tctl"
 
-# GX430T_PACKAGE_PAYLOAD_SANITIZE_V2_BEGIN
-find "$PKGROOT" -depth -type d \( \
-  -name DerivedData \
-  -o -name DerivedDataDevice \
-  -o -name build \
-  -o -name .build \
-  -o -name .swiftpm \
-  -o -name xcuserdata \
-\) -exec rm -rf {} +
+find "$PKGROOT/usr/local/gx430t/scripts" \
+  -type f \
+  -name '*.sh' \
+  -exec chmod +x {} +
 
-find "$PKGROOT" -type f \( \
-  -name '*.xcuserstate' \
-  -o -name '*.xcuserdatad' \
-\) -delete
+find "$PKGROOT/usr/local/gx430t/install" \
+  -type f \
+  -name '*.sh' \
+  -exec chmod +x {} +
+
+ln -sfn \
+  /usr/local/gx430t/bin/gx430tctl \
+  "$PKGROOT/usr/local/bin/gx430tctl"
+
+find "$PKGROOT" -depth -type d \
+  \( \
+    -name 'DerivedData*' \
+    -o -name build \
+    -o -name .build \
+    -o -name .swiftpm \
+    -o -name xcuserdata \
+  \) \
+  -exec rm -rf {} +
+
+find "$PKGROOT" -type f \
+  \( \
+    -name '*.xcuserstate' \
+    -o -name '__preview.dylib' \
+    -o -name '*.debug.dylib' \
+  \) \
+  -delete
 
 if find "$PKGROOT" \
   \( \
-    -path '*/DerivedData/*' \
-    -o -path '*/DerivedDataDevice/*' \
+    -name 'DerivedData*' \
+    -o -path '*/DerivedData*/*' \
     -o -path '*/.build/*' \
     -o -path '*/.swiftpm/*' \
     -o -path '*/xcuserdata/*' \
     -o -name '*.xcuserstate' \
+    -o -name '__preview.dylib' \
+    -o -name '*.debug.dylib' \
   \) \
   -print \
   -quit \
@@ -64,7 +112,8 @@ if find "$PKGROOT" \
   echo "GX430T_GENERATED_BUILD_STATE_IN_PACKAGE=true" >&2
   exit 1
 fi
-# GX430T_PACKAGE_PAYLOAD_SANITIZE_V2_END
+
+rm -f "$PKG" "$PKG.sha256"
 
 pkgbuild \
   --root "$PKGROOT" \
@@ -75,6 +124,7 @@ pkgbuild \
   "$PKG"
 
 shasum -a 256 "$PKG" > "$PKG.sha256"
+
 echo "GX430T_PKG_BUILD_DONE=true"
 echo "PKG=$PKG"
 echo "SHA256=$PKG.sha256"
