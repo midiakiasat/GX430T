@@ -787,11 +787,19 @@ struct HistoryView: View {
             }
 
             if model.history.isEmpty {
-                ContentUnavailableView(
-                    "No Print History",
-                    systemImage: "printer",
-                    description: Text("Completed print jobs will appear here.")
-                )
+                VStack(spacing: 14) {
+                    Image(systemName: "printer")
+                        .font(.system(size: 44, weight: .regular))
+                        .foregroundStyle(.secondary)
+
+                    Text("No Print History")
+                        .font(.title2.weight(.semibold))
+
+                    Text("Completed print jobs will appear here.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
             } else {
                 List(model.history) { item in
                     HStack(spacing: 14) {

@@ -1,0 +1,27 @@
+{
+  "schema": "gx430t.universal-macos-build.v2",
+  "recorded_at": "2026-07-15T08:48:55.154172+00:00",
+  "repository": "midiakiasat/GX430T",
+  "source_commit": "6f8c7beef7027f4bc327cfcfa7001b68a40a95c6",
+  "product": {
+    "version": "0.2.8",
+    "build": "28",
+    "minimum_macos": "13.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "apple_silicon_supported": true,
+    "intel_supported": true,
+    "macos_13_source_compatible": true
+  },
+  "package": {
+    "filename": "GX430T-Mac-Control-0.2.8.pkg",
+    "sha256": "f15071020955d341370721167af034a6678ca40babb3abbd0e69ee239e290cb5",
+    "universal_binary_verified": true,
+    "developer_id_signed": false,
+    "notarized": false,
+    "private_installable": true,
+    "global_distribution_authorized": false
+  }
+}
