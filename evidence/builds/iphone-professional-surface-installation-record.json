@@ -1,0 +1,28 @@
+{
+  "schema": "gx430t.iphone-professional-surface-installation.v2",
+  "recorded_at": "2026-07-15T07:11:33.643876+00:00",
+  "repository": "midiakiasat/GX430T",
+  "commit": "57ff16281fc936bebf2607abd5ce1d7fef82cf33",
+  "application": {
+    "bundle_identifier": "com.kaaffilm.gx430t.iphone",
+    "version": "0.2.8",
+    "build": "28",
+    "professional_pairing_surface": true,
+    "keyboard_obstruction_removed": true,
+    "single_screen_print_control": true,
+    "local_network_privacy_configured": true
+  },
+  "signing": {
+    "authority": "Apple Development",
+    "development_team": "HXCASDABD9",
+    "developer_profile_explicitly_trusted": true,
+    "global_distribution_authorized": false
+  },
+  "device": {
+    "udid": "00008150-0004250C14F3401C",
+    "installed": true,
+    "launched": true,
+    "running_process_verified": true,
+    "physical_surface_acceptance_pending": true
+  }
+}
