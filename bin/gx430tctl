@@ -1,340 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOURCE="${BASH_SOURCE[0]}"
-while [ -L "$SOURCE" ]; do
-  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-  SOURCE="$(readlink "$SOURCE")"
-  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
-done
+ROOT="${GX430T_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+PY="${GX430T_PYTHON:-python3}"
+PORT="${GX430T_PORT:-9430}"
 
-DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-
-if [ -d "$DIR/../scripts" ] && [ -d "$DIR/../install" ]; then
-  ROOT="$(cd "$DIR/.." && pwd)"
-elif [ -d "/usr/local/gx430t/scripts" ] && [ -d "/usr/local/gx430t/install" ]; then
-  ROOT="/usr/local/gx430t"
-else
-  echo "GX430T_ROOT_NOT_FOUND=true" >&2
-  exit 70
-fi
-
-CMD="${1:-}"
-
-usage() {
-  cat <<USAGE
-gx430tctl status
-gx430tctl discover
-gx430tctl install-local
-gx430tctl install-client <host-ip>
-gx430tctl share-on
-gx430tctl print-text <value> [copies]
-gx430tctl print-code128 <value> [copies]
-gx430tctl print-code39 <value> [copies]
-gx430tctl print-qr <value> [copies]
-gx430tctl host-install
-gx430tctl host-status
-gx430tctl host-info
-gx430tctl host-pairing-code
-gx430tctl host-rotate-pairing
-gx430tctl host-secret
-gx430tctl host-remove
-gx430tctl client-pair <host-url> <pairing-code> [client-name]
-gx430tctl client-status
-gx430tctl client-info
-gx430tctl client-print <text|code128|code39|qr> <value> [copies]
-gx430tctl client-jobs [limit]
-gx430tctl client-job-summary
-gx430tctl client-remove
-gx430tctl app-autostart-on
-gx430tctl app-autostart-off
-gx430tctl app-autostart-status
-gx430tctl host-start
-gx430tctl host-stop
-gx430tctl host-restart
-gx430tctl diagnose
-gx430tctl verify
-USAGE
-}
-
-case "$CMD" in
-  status)
-    LOCAL_STATUS="$(lpstat -p GX430t -l 2>&1 || true)"
-    QUEUE_JOBS="$(lpstat -o GX430t 2>/dev/null || true)"
-
-    if [[ "$LOCAL_STATUS" == *"Invalid destination"* ]] || [[ "$LOCAL_STATUS" == *"Unknown destination"* ]]; then
-      echo "GX430T_STATUS=NOT_CONFIGURED"
-      echo "$LOCAL_STATUS"
-      exit 2
-    fi
-
-    if [[ "$LOCAL_STATUS" =~ [Oo]ffline|[Dd]isabled|not\ accepting ]]; then
-      echo "GX430T_STATUS=OFFLINE"
-      echo "$LOCAL_STATUS"
-      [[ -n "$QUEUE_JOBS" ]] && echo "$QUEUE_JOBS"
-      exit 1
-    fi
-
-    if [[ "$LOCAL_STATUS" =~ printing ]] || [[ -n "$QUEUE_JOBS" ]]; then
-      echo "GX430T_STATUS=PRINTING"
-      echo "$LOCAL_STATUS"
-      [[ -n "$QUEUE_JOBS" ]] && echo "$QUEUE_JOBS"
-      exit 0
-    fi
-
-    if [[ "$LOCAL_STATUS" =~ idle ]]; then
-      echo "GX430T_STATUS=ONLINE"
-      echo "$LOCAL_STATUS"
-      exit 0
-    fi
-
-    echo "GX430T_STATUS=UNKNOWN"
-    echo "$LOCAL_STATUS"
-    exit 1
+case "${1:-help}" in
+  start|serve)
+    cd "$ROOT"
+    exec "$PY" host-service/gx430t_host.py serve --port "$PORT" --open
     ;;
-  discover)
-    echo "=== CUPS USB DISCOVERY ==="
-    lpinfo -v | grep -i "zebra\|gx430\|ztc" || true
-    echo "=== SYSTEM USB DISCOVERY ==="
-    system_profiler SPUSBDataType 2>/dev/null | grep -i -A 12 -B 4 "zebra\|gx430\|ztc" || true
+  start-bg)
+    cd "$ROOT"
+    mkdir -p "$HOME/.gx430t"
+    nohup "$PY" host-service/gx430t_host.py serve --port "$PORT" > "$HOME/.gx430t/host.log" 2>&1 &
+    echo "GX430T_HOST_PID=$!"
+    echo "URL=http://127.0.0.1:$PORT"
     ;;
-  install-local)
-    bash "$ROOT/install/install-macos-cups.sh"
-    ;;
-  install-client)
-    shift
-    bash "$ROOT/install/install-client-shared-printer.sh" "${1:-}"
-    ;;
-  share-on)
-    bash "$ROOT/install/enable-host-sharing.sh"
-    ;;
-  print-text)
-    shift
-    bash "$ROOT/scripts/print-text.sh" "${1:-}" "${2:-1}"
-    ;;
-  print-code128)
-    shift
-    bash "$ROOT/scripts/print-code128.sh" "${1:-}" "${2:-1}"
-    ;;
-  print-code39)
-    shift
-    bash "$ROOT/scripts/print-code39.sh" "${1:-}" "${2:-1}"
-    ;;
-  print-qr)
-    shift
-    bash "$ROOT/scripts/print-qr.sh" "${1:-}" "${2:-1}"
-    ;;
-  host-install)
-    bash "$ROOT/install/install-host-service.sh"
-    ;;
-  host-status)
-    RESPONSE_FILE="$(mktemp)"
-    HTTP_STATUS="$(
-      curl         --silent         --show-error         --output "$RESPONSE_FILE"         --write-out '%{http_code}'         http://127.0.0.1:43043/v1/status
-    )"
-
-    cat "$RESPONSE_FILE"
-    echo
-    rm -f "$RESPONSE_FILE"
-
-    if [[ "$HTTP_STATUS" = "200" ]]; then
-      echo "GX430T_HOST_PRINTER_STATUS=ONLINE"
-      exit 0
-    fi
-
-    if [[ "$HTTP_STATUS" = "503" ]]; then
-      echo "GX430T_HOST_PRINTER_STATUS=OFFLINE"
-      exit 1
-    fi
-
-    echo "GX430T_HOST_STATUS_HTTP=$HTTP_STATUS"
-    exit 1
-    ;;
-  host-info)
-    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
-    HOST_IP="$(ipconfig getifaddr en1 || ipconfig getifaddr en0 || true)"
-    test -f "$CONFIG"
-    python3 - "$CONFIG" "$HOST_IP" <<'PY_HOST_INFO'
-import json
-import sys
-
-config = json.load(open(sys.argv[1]))
-host_ip = sys.argv[2]
-
-print(f"GX430T_HOST_NAME={config.get('hostName', 'GX430T Host')}")
-print(f"GX430T_HOST_IP={host_ip}")
-print(f"GX430T_HOST_PORT={config.get('port', 43043)}")
-print(f"GX430T_HOST_URL=http://{host_ip}:{config.get('port', 43043)}")
-print(f"GX430T_PAIRING_CODE={config.get('pairingCode', '')}")
-print(f"GX430T_PAIRING_ENABLED={str(config.get('pairingEnabled', False)).lower()}")
-print(f"GX430T_HOST_PROTOCOL={config.get('protocol', 1)}")
-PY_HOST_INFO
-    ;;
-  host-pairing-code)
-    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
-    test -f "$CONFIG"
-    python3 - "$CONFIG" <<'PY_HOST_PAIRING'
-import json
-import sys
-
-config = json.load(open(sys.argv[1]))
-print(config.get("pairingCode", ""))
-PY_HOST_PAIRING
-    ;;
-  host-rotate-pairing)
-    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
-    test -f "$CONFIG"
-    NEW_CODE="$(python3 - <<'PY_PAIRING_CODE'
-import secrets
-print(f"{secrets.randbelow(1000000):06d}")
-PY_PAIRING_CODE
-)"
-    python3 - "$CONFIG" "$NEW_CODE" <<'PY_ROTATE_PAIRING'
-import json
-import pathlib
-import sys
-
-path = pathlib.Path(sys.argv[1])
-config = json.loads(path.read_text())
-config["pairingCode"] = sys.argv[2]
-config["pairingEnabled"] = True
-path.write_text(json.dumps(config, indent=2) + "\n")
-path.chmod(0o600)
-PY_ROTATE_PAIRING
-    echo "$NEW_CODE"
-    ;;
-  host-secret)
-    CONFIG="$HOME/Library/Application Support/GX430T/host.json"
-    test -f "$CONFIG"
-    python3 - "$CONFIG" <<'PY_HOST_SECRET'
-import json
-import sys
-
-config = json.load(open(sys.argv[1]))
-print(config.get("token", ""))
-PY_HOST_SECRET
-    ;;
-  host-remove)
-    bash "$ROOT/install/remove-host-service.sh"
-    ;;
-  client-pair)
-    shift
-    HOST_URL="${1:-}"
-    PAIRING_CODE="${2:-}"
-    CLIENT_NAME="${3:-$(scutil --get ComputerName 2>/dev/null || hostname)}"
-
-    if [[ -z "$HOST_URL" || -z "$PAIRING_CODE" ]]; then
-      echo "usage: gx430tctl client-pair <host-url> <pairing-code> [client-name]" >&2
-      exit 64
-    fi
-
-    python3 "$ROOT/client/gx430t_client.py"       pair "$HOST_URL" "$PAIRING_CODE"       --name "$CLIENT_NAME"
-    ;;
-  client-status)
-    python3 "$ROOT/client/gx430t_client.py" status
-    ;;
-  client-info)
-    python3 "$ROOT/client/gx430t_client.py" info
-    ;;
-  client-print)
-    shift
-    KIND="${1:-}"
-    VALUE="${2:-}"
-    COPIES="${3:-1}"
-
-    if [[ -z "$KIND" || -z "$VALUE" ]]; then
-      echo "usage: gx430tctl client-print <text|code128|code39|qr> <value> [copies]" >&2
-      exit 64
-    fi
-
-    python3 "$ROOT/client/gx430t_client.py"       print "$KIND" "$VALUE" "$COPIES"
-    ;;
-  client-jobs)
-    shift
-    python3 "$ROOT/client/gx430t_client.py" jobs "${1:-25}"
-    ;;
-  client-job-summary)
-    python3 "$ROOT/client/gx430t_client.py" job-summary
-    ;;
-  client-remove)
-    python3 "$ROOT/client/gx430t_client.py" remove
-    ;;
-  app-autostart-on)
-    bash "$ROOT/install/install-app-autostart.sh"
-    ;;
-  app-autostart-off)
-    bash "$ROOT/install/remove-app-autostart.sh"
-    ;;
-  app-autostart-status)
-    PLIST="$HOME/Library/LaunchAgents/com.kaaffilm.gx430t.mac-control.autostart.plist"
-    LABEL="com.kaaffilm.gx430t.mac-control.autostart"
-
-    if [[ -f "$PLIST" ]]; then
-      echo "GX430T_APP_AUTOSTART=ENABLED"
-      launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null         | grep -E 'state =|last exit code|program =' || true
-      exit 0
-    fi
-
-    echo "GX430T_APP_AUTOSTART=DISABLED"
-    exit 1
-    ;;
-  host-start)
-    PLIST="$HOME/Library/LaunchAgents/com.kaaffilm.gx430t.print-host.plist"
-    LABEL="com.kaaffilm.gx430t.print-host"
-
-    if [[ ! -f "$PLIST" ]]; then
-      bash "$ROOT/install/install-host-service.sh"
-    else
-      launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || true
-      launchctl enable "gui/$(id -u)/$LABEL"
-      launchctl kickstart -k "gui/$(id -u)/$LABEL"
-    fi
-
-    echo "GX430T_HOST_STARTED=true"
-    ;;
-  host-stop)
-    LABEL="com.kaaffilm.gx430t.print-host"
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  stop)
+    lsof -ti tcp:"$PORT" | xargs kill -9 >/dev/null 2>&1 || true
     echo "GX430T_HOST_STOPPED=true"
     ;;
-  host-restart)
-    PLIST="$HOME/Library/LaunchAgents/com.kaaffilm.gx430t.print-host.plist"
-    LABEL="com.kaaffilm.gx430t.print-host"
-
-    test -f "$PLIST"
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
-    launchctl enable "gui/$(id -u)/$LABEL"
-    launchctl kickstart -k "gui/$(id -u)/$LABEL"
-
-    echo "GX430T_HOST_RESTARTED=true"
+  open)
+    open "http://127.0.0.1:$PORT" || true
     ;;
-  diagnose)
-    echo "=== GX430T DIAGNOSE ==="
-    echo "ROOT=$ROOT"
-    sw_vers || true
-    echo "--- PRINTERS ---"
-    lpstat -v || true
-    echo "--- GX430T LOCAL ---"
-    lpstat -p GX430t -l || true
-    echo "--- GX430T SHARED ---"
-    lpstat -p GX430t_shared -l || true
-    echo "--- CUPS USB ZEBRA ---"
-    lpinfo -v | grep -i "zebra\|gx430\|ztc" || true
-    echo "--- SYSTEM USB ZEBRA ---"
-    system_profiler SPUSBDataType 2>/dev/null | grep -i -A 12 -B 4 "zebra\|gx430\|ztc" || true
-    echo "--- HOST IP ---"
-    ipconfig getifaddr en1 || ipconfig getifaddr en0 || true
+  upload)
+    shift
+    cd "$ROOT"
+    exec "$PY" host-service/gx430t_host.py upload "$@"
     ;;
-  verify)
-    bash "$ROOT/scripts/verify-gx430t-control.sh"
+  status)
+    cd "$ROOT"
+    exec "$PY" host-service/gx430t_host.py status
     ;;
-  ""|-h|--help|help)
-    usage
+  print-next|print-all|clear)
+    cd "$ROOT"
+    exec "$PY" host-service/gx430t_host.py "$1"
+    ;;
+  health)
+    curl -fsS "http://127.0.0.1:$PORT/api/health"
     ;;
   *)
-    echo "unknown command: $CMD" >&2
-    usage >&2
-    exit 64
+    cat <<EOF
+GX430T Mac Control v0.2.9
+
+Commands:
+  gx430tctl start       Start local upload/queue/print UI
+  gx430tctl start-bg    Start in background
+  gx430tctl open        Open browser UI
+  gx430tctl upload FILE Add CSV/XLSX to ordered print queue
+  gx430tctl status      Show queue status
+  gx430tctl print-next  Print next queued label
+  gx430tctl print-all   Print all queued labels in order
+  gx430tctl clear       Clear queued labels
+  gx430tctl stop        Stop local server
+
+UI:
+  http://127.0.0.1:$PORT
+EOF
     ;;
 esac

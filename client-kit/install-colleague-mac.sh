@@ -1,34 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== GX430T COLLEAGUE MAC INSTALL ==="
+INSTALL_DIR="/usr/local/gx430t"
+BIN_LINK="/usr/local/bin/gx430tctl"
 
-HOST_IP="${1:-192.168.0.55}"
-CLIENT_PRINTER="${GX430T_CLIENT_PRINTER:-GX430t_shared}"
-MODEL="${GX430T_MODEL:-drv:///sample.drv/zebra.ppd}"
+echo "=== GX430T COLLEAGUE MAC INSTALL v0.2.9 ==="
 
-echo "HOST_IP=$HOST_IP"
-echo "CLIENT_PRINTER=$CLIENT_PRINTER"
-echo "IPP=ipp://$HOST_IP/printers/GX430t"
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-sudo lpadmin -p "$CLIENT_PRINTER" -E -v "ipp://$HOST_IP/printers/GX430t" -m "$MODEL"
+sudo mkdir -p "$INSTALL_DIR"
+sudo rsync -a --delete \
+  --exclude ".git" \
+  --exclude "release" \
+  "$SRC/" "$INSTALL_DIR/"
 
-lpstat -p "$CLIENT_PRINTER" -l
+sudo ln -sf "$INSTALL_DIR/bin/gx430tctl" "$BIN_LINK"
 
-cat > /tmp/gx430t-client-test.zpl <<'ZPL'
-^XA
-^PW812
-^LL600
-^PR2
-^MD20
-^FO80,90
-^BY4,3,230
-^BCN,230,Y,N,N
-^FD1234567890^FS
-^PQ1
-^XZ
-ZPL
+if [ -x "$INSTALL_DIR/install/install-macos-cups.sh" ]; then
+  sudo "$INSTALL_DIR/install/install-macos-cups.sh" || true
+fi
 
-lpr -P "$CLIENT_PRINTER" -l /tmp/gx430t-client-test.zpl
+if [ -x "$INSTALL_DIR/install/install-host-service.sh" ]; then
+  sudo "$INSTALL_DIR/install/install-host-service.sh" || true
+fi
 
-echo "GX430T_COLLEAGUE_CLIENT_INSTALL_DONE=true"
+"$BIN_LINK" start-bg || true
+open "http://127.0.0.1:9430" || true
+
+echo "INSTALLED=$INSTALL_DIR"
+echo "COMMAND=gx430tctl start"
+echo "URL=http://127.0.0.1:9430"
+echo "GX430T_COLLEAGUE_INSTALL_COMPLETE=true"

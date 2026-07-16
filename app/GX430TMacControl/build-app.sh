@@ -1,76 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD="$ROOT/build"
-APP="$BUILD/GX430T Mac Control.app"
-CONTENTS="$APP/Contents"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+APP_DIR="$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app"
+CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
-RESOURCES="$CONTENTS/Resources"
-SDK="$(xcrun --sdk macosx --show-sdk-path)"
-MINIMUM_MACOS="13.0"
+RES="$CONTENTS/Resources"
 
-rm -rf "$APP"
-mkdir -p "$MACOS" "$RESOURCES" "$BUILD/architectures"
+rm -rf "$APP_DIR"
+mkdir -p "$MACOS" "$RES"
 
-SOURCES=()
-while IFS= read -r SOURCE; do
-  SOURCES+=("$SOURCE")
-done < <(
-  find "$ROOT/Sources" \
-    -type f \
-    -name '*.swift' \
-    -print \
-    | sort
-)
+swiftc "$ROOT/app/GX430TMacControl/Sources/GX430TMacControl/main.swift" -o "$MACOS/GX430TMacControl"
 
-test "${#SOURCES[@]}" -gt 0
+cp -f "$ROOT/app/GX430TMacControl/Resources/Info.plist" "$CONTENTS/Info.plist" 2>/dev/null || cat > "$CONTENTS/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>GX430T Mac Control</string>
+<key>CFBundleDisplayName</key><string>GX430T Mac Control</string>
+<key>CFBundleIdentifier</key><string>com.midiakiasat.gx430t.maccontrol</string>
+<key>CFBundleVersion</key><string>0.2.9</string>
+<key>CFBundleShortVersionString</key><string>0.2.9</string>
+<key>CFBundleExecutable</key><string>GX430TMacControl</string>
+<key>LSMinimumSystemVersion</key><string>10.13</string>
+</dict></plist>
+EOF
 
-echo "=== BUILD ARM64 ==="
-swiftc "${SOURCES[@]}" \
-  -parse-as-library \
-  -sdk "$SDK" \
-  -target "arm64-apple-macos${MINIMUM_MACOS}" \
-  -o "$BUILD/architectures/GX430TMacControl-arm64" \
-  -framework SwiftUI \
-  -framework AppKit
+cp -f "$ROOT/app/GX430TMacControl/Resources/GX430TAppIcon.icns" "$RES/" 2>/dev/null || true
+cp -f "$ROOT/branding/ZEBRAGX430TLOGO.svg" "$RES/" 2>/dev/null || true
 
-echo "=== BUILD X86_64 ==="
-swiftc "${SOURCES[@]}" \
-  -parse-as-library \
-  -sdk "$SDK" \
-  -target "x86_64-apple-macos${MINIMUM_MACOS}" \
-  -o "$BUILD/architectures/GX430TMacControl-x86_64" \
-  -framework SwiftUI \
-  -framework AppKit
-
-echo "=== CREATE UNIVERSAL BINARY ==="
-lipo -create \
-  "$BUILD/architectures/GX430TMacControl-arm64" \
-  "$BUILD/architectures/GX430TMacControl-x86_64" \
-  -output "$MACOS/GX430TMacControl"
-
-chmod 755 "$MACOS/GX430TMacControl"
-
-cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
-
-rsync -a \
-  --exclude "Info.plist" \
-  "$ROOT/Resources/" \
-  "$RESOURCES/"
-
-rm -rf "$BUILD/architectures"
-
-test -f "$RESOURCES/ZEBRAGX430TLOGO.svg"
-test -f "$RESOURCES/GX430TAppIcon.icns"
-
-ARCHITECTURES="$(lipo -archs "$MACOS/GX430TMacControl")"
-
-echo "GX430T_NATIVE_APP_ARCHITECTURES=$ARCHITECTURES"
-
-echo "$ARCHITECTURES" | grep -qw arm64
-echo "$ARCHITECTURES" | grep -qw x86_64
-
-echo "GX430T_NATIVE_APP_UNIVERSAL=true"
-echo "GX430T_NATIVE_APP_BUILD_DONE=true"
-echo "APP=$APP"
+echo "BUILT_APP=$APP_DIR"

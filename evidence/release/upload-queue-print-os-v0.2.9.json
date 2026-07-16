@@ -1,0 +1,20 @@
+{
+"product": "GX430T Mac Control",
+"version": "0.2.9",
+"move": "092",
+"capabilities": [
+"CSV upload",
+"XLSX upload without external Python dependencies",
+"automatic barcode/title/quantity column mapping",
+"quantity expansion",
+"ordered print queue",
+"browser operator UI",
+"CLI queue controls",
+"CUPS raw ZPL printing",
+"Mac app opens local UI",
+"colleague install script"
+],
+"port": 9430,
+"local_url": "[http://127.0.0.1:9430](http://127.0.0.1:9430)",
+"created_at": "2026-07-16T19:08:01Z"
+}

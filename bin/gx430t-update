@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SELF_DIR/.." && pwd)"
-
-if [[ -x "$ROOT/updater/gx430t_updater.py" ]]; then
-  exec "$ROOT/updater/gx430t_updater.py" "$@"
-fi
-
-if [[ -x /usr/local/gx430t/updater/gx430t_updater.py ]]; then
-  exec /usr/local/gx430t/updater/gx430t_updater.py "$@"
-fi
-
-echo "GX430T_UPDATER_NOT_FOUND=true" >&2
-exit 1
+ROOT="${GX430T_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cd "$ROOT"
+git pull --ff-only || true
+echo "GX430T_UPDATE_DONE=true"
+bin/gx430tctl start-bg
