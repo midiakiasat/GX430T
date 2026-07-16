@@ -1,61 +1,21 @@
-# GX430T Upload Queue Print OS v0.2.9
+# GX430T Upload Queue v0.3.0
 
-## What it does
+The main product remains the native GX430T Mac Control app.
 
-GX430T Mac Control can now accept an Excel `.xlsx` or CSV file, map barcode/product columns automatically, expand quantities into individual labels, queue labels in file order, and print them in order to the GX430T.
+The Excel/CSV queue is only a secondary batch-print tool. It must not replace the native app surface.
 
-## Start
+Start secondary queue:
 
 ```bash
 gx430tctl start
 ````
 
-Then open:
+Open:
 
 ```text
 http://127.0.0.1:9430
 ```
 
-## Upload format
+Accepted columns include barcode, sku, style code, item code, codice, EAN, quantity, qty, qta, description, brand, order, ordine, sequence.
 
-Supported columns include:
-
-* `barcode`
-* `sku`
-* `style code`
-* `item code`
-* `codice`
-* `ean`
-* `description`
-* `brand`
-* `quantity`
-* `qty`
-* `qta`
-
-If no exact barcode column exists, the first non-empty column is used.
-
-## Print order
-
-Rows are queued in file order. If the file includes `order`, `ordine`, `sequence`, or `priority`, that column controls ordering.
-
-## Commands
-
-```bash
-gx430tctl start
-gx430tctl upload products.xlsx
-gx430tctl status
-gx430tctl print-next
-gx430tctl print-all
-gx430tctl clear
-gx430tctl stop
-```
-
-## Printer selection
-
-Set a printer explicitly:
-
-```bash
-export GX430T_PRINTER="GX430T"
-```
-
-Otherwise the host searches installed CUPS printers for `GX430T` or `Zebra`.
+Quantity expands one spreadsheet row into the requested number of queue labels.

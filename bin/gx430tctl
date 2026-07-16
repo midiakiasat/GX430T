@@ -13,6 +13,7 @@ case "${1:-help}" in
   start-bg)
     cd "$ROOT"
     mkdir -p "$HOME/.gx430t"
+    lsof -ti tcp:"$PORT" | xargs kill -9 >/dev/null 2>&1 || true
     nohup "$PY" host-service/gx430t_host.py serve --port "$PORT" > "$HOME/.gx430t/host.log" 2>&1 &
     echo "GX430T_HOST_PID=$!"
     echo "URL=http://127.0.0.1:$PORT"
@@ -42,21 +43,17 @@ case "${1:-help}" in
     ;;
   *)
     cat <<EOF
-GX430T Mac Control v0.2.9
+GX430T Mac Control v0.3.0
 
-Commands:
-  gx430tctl start       Start local upload/queue/print UI
-  gx430tctl start-bg    Start in background
-  gx430tctl open        Open browser UI
-  gx430tctl upload FILE Add CSV/XLSX to ordered print queue
-  gx430tctl status      Show queue status
-  gx430tctl print-next  Print next queued label
-  gx430tctl print-all   Print all queued labels in order
-  gx430tctl clear       Clear queued labels
-  gx430tctl stop        Stop local server
+Primary:
+  Native GX430T Mac Control app.
 
-UI:
-  http://127.0.0.1:$PORT
+Secondary batch queue:
+  gx430tctl start
+  gx430tctl upload file.csv
+  gx430tctl upload file.xlsx
+  gx430tctl print-next
+  gx430tctl print-all
 EOF
     ;;
 esac

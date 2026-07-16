@@ -1,0 +1,12 @@
+{
+"product": "GX430T Mac Control",
+"version": "0.3.0",
+"move": "093E",
+"primary_ui": "native Mac quick print UI",
+"secondary_tool": "CSV/XLSX upload queue at [http://127.0.0.1:9430](http://127.0.0.1:9430)",
+"host_verified": true,
+"native_app_verified": true,
+"csv_quantity_expansion_verified": true,
+"bad_replacement_ui_removed": true,
+"created_at": "2026-07-16T19:23:42Z"
+}
