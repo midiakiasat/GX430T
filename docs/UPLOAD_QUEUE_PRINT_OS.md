@@ -1,21 +1,35 @@
-# GX430T Upload Queue v0.3.0
+# GX430T Upload Queue v0.3.1
 
-The main product remains the native GX430T Mac Control app.
+The upload queue is now available from inside the native GX430T Mac Control app.
 
-The Excel/CSV queue is only a secondary batch-print tool. It must not replace the native app surface.
+Main app stays native and professional:
 
-Start secondary queue:
+- Quick Print remains the first/default surface.
+- Upload Queue is available in the left sidebar.
+- Operator can choose Excel `.xlsx` or CSV `.csv`.
+- Queue preserves order.
+- Quantity expands one spreadsheet row into multiple labels.
+- Buttons inside the native app: Choose Excel / CSV, Open Queue, Refresh Queue, Print Next, Print All.
+
+Supported columns include:
+
+- barcode
+- sku
+- style code
+- item code
+- codice
+- EAN
+- quantity / qty / qta
+- description / brand
+- order / ordine / sequence
+
+CLI remains available:
 
 ```bash
 gx430tctl start
+gx430tctl upload file.xlsx
+gx430tctl upload file.csv
+gx430tctl print-next
+gx430tctl print-all
 ````
 
-Open:
-
-```text
-http://127.0.0.1:9430
-```
-
-Accepted columns include barcode, sku, style code, item code, codice, EAN, quantity, qty, qta, description, brand, order, ordine, sequence.
-
-Quantity expands one spreadsheet row into the requested number of queue labels.

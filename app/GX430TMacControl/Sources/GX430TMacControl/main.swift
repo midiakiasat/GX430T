@@ -3,6 +3,11 @@ import Foundation
 
 final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelegate {
     var window: NSWindow!
+
+    var mainRoot: NSView!
+    var quickView: NSView!
+    var queueView: NSView!
+
     var contentText: NSTextView!
     var statusLabel: NSTextField!
     var charCount: NSTextField!
@@ -10,7 +15,12 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
     var previewCode: NSTextField!
     var modeControl: NSSegmentedControl!
     var copiesField: NSTextField!
+    var queueLog: NSTextView!
+    var queueStatus: NSTextField!
+    var uploadButton: NSButton!
     var mode: String = "Code 128"
+
+    let port = "9430"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow()
@@ -30,7 +40,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
             defer: false
         )
         window.center()
-        window.title = "GX430T Mac Control v0.3.0"
+        window.title = "GX430T Mac Control v0.3.1"
         window.minSize = NSSize(width: 980, height: 640)
 
         let root = NSView(frame: frame)
@@ -57,13 +67,16 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         rule.boxType = .separator
         sidebar.addSubview(rule)
 
-        sidebarItem(sidebar, y: 500, icon: "⚡", label: "Quick Print")
-        sidebarItem(sidebar, y: 458, icon: "↺", label: "History")
-        sidebarItem(sidebar, y: 416, icon: "⚠", label: "Connection")
+        let quick = btn("⚡  Quick Print", #selector(showQuickPrint))
+        quick.frame = NSRect(x: 30, y: 498, width: 220, height: 36)
+        sidebar.addSubview(quick)
 
-        let upload = btn("Upload Queue", #selector(openUploadQueue))
-        upload.frame = NSRect(x: 30, y: 344, width: 220, height: 36)
-        sidebar.addSubview(upload)
+        let batch = btn("⇪  Upload Queue", #selector(showUploadQueue))
+        batch.frame = NSRect(x: 30, y: 454, width: 220, height: 36)
+        sidebar.addSubview(batch)
+
+        sidebarItem(sidebar, y: 410, icon: "↺", label: "History")
+        sidebarItem(sidebar, y: 368, icon: "⚠", label: "Connection")
 
         let refresh = btn("↻  Refresh Printer", #selector(refreshPrinterAction))
         refresh.frame = NSRect(x: 30, y: 74, width: 220, height: 34)
@@ -74,33 +87,64 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         sideFoot.maximumNumberOfLines = 2
         sidebar.addSubview(sideFoot)
 
-        let main = NSView(frame: NSRect(x: 285, y: 0, width: 895, height: 760))
+        mainRoot = NSView(frame: NSRect(x: 285, y: 0, width: 895, height: 760))
+        mainRoot.autoresizingMask = [.width, .height]
+        mainRoot.wantsLayer = true
+        mainRoot.layer?.backgroundColor = NSColor(calibratedWhite: 0.075, alpha: 1).cgColor
+
+        quickView = buildQuickPrintView()
+        queueView = buildUploadQueueView()
+        queueView.isHidden = true
+
+        mainRoot.addSubview(quickView)
+        mainRoot.addSubview(queueView)
+
+        root.addSubview(sidebar)
+        root.addSubview(mainRoot)
+        window.contentView = root
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        updatePreview()
+    }
+
+    func buildQuickPrintView() -> NSView {
+        let main = NSView(frame: NSRect(x: 0, y: 0, width: 895, height: 760))
         main.autoresizingMask = [.width, .height]
-        main.wantsLayer = true
-        main.layer?.backgroundColor = NSColor(calibratedWhite: 0.075, alpha: 1).cgColor
 
         let mainTitle = text("GX430T", 18, .white, .bold)
         mainTitle.frame = NSRect(x: 26, y: 704, width: 240, height: 30)
         main.addSubview(mainTitle)
 
+        let h = text("Quick Print", 38, .white, .bold)
+        h.frame = NSRect(x: 38, y: 638, width: 440, height: 50)
+        main.addSubview(h)
+
+        let sub = text("Type, preview and print.", 16, .lightGray, .semibold)
+        sub.frame = NSRect(x: 40, y: 612, width: 420, height: 28)
+        main.addSubview(sub)
+
+        let format = text("FORMAT", 13, .gray, .bold)
+        format.frame = NSRect(x: 40, y: 566, width: 180, height: 24)
+        main.addSubview(format)
+
         modeControl = NSSegmentedControl(labels: ["Aa  Text", "▥  Code 128", "▥  Code 39", "⌗  QR"], trackingMode: .selectOne, target: self, action: #selector(modeChanged))
-        modeControl.frame = NSRect(x: 38, y: 662, width: 812, height: 44)
+        modeControl.frame = NSRect(x: 38, y: 524, width: 812, height: 46)
         modeControl.selectedSegment = 1
         main.addSubview(modeControl)
 
-        let inputCard = panel(NSRect(x: 38, y: 472, width: 812, height: 164), radius: 18)
+        let inputCard = panel(NSRect(x: 38, y: 338, width: 812, height: 164), radius: 18)
         main.addSubview(inputCard)
 
         let labelContent = text("↗  Label content", 14, .lightGray, .semibold)
-        labelContent.frame = NSRect(x: 58, y: 604, width: 260, height: 24)
+        labelContent.frame = NSRect(x: 58, y: 470, width: 260, height: 24)
         main.addSubview(labelContent)
 
         charCount = text("0 characters", 12, .gray, .regular)
         charCount.alignment = .right
-        charCount.frame = NSRect(x: 650, y: 604, width: 180, height: 24)
+        charCount.frame = NSRect(x: 650, y: 470, width: 180, height: 24)
         main.addSubview(charCount)
 
-        contentText = NSTextView(frame: NSRect(x: 58, y: 492, width: 772, height: 92))
+        contentText = NSTextView(frame: NSRect(x: 58, y: 358, width: 772, height: 92))
         contentText.font = NSFont.systemFont(ofSize: 22, weight: .medium)
         contentText.textColor = .white
         contentText.backgroundColor = .clear
@@ -108,57 +152,99 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         contentText.delegate = self
         main.addSubview(contentText)
 
-        let previewCard = NSView(frame: NSRect(x: 38, y: 172, width: 812, height: 240))
+        let previewCard = NSView(frame: NSRect(x: 38, y: 92, width: 812, height: 210))
         previewCard.wantsLayer = true
         previewCard.layer?.backgroundColor = NSColor.white.cgColor
         previewCard.layer?.cornerRadius = 20
         main.addSubview(previewCard)
 
         previewCode = text("||||||||||||||||||||||||||||||||||||||||", 48, .black, .regular)
-        previewCode.font = NSFont.monospacedSystemFont(ofSize: 48, weight: .regular)
+        previewCode.font = NSFont.monospacedSystemFont(ofSize: 46, weight: .regular)
         previewCode.alignment = .center
-        previewCode.frame = NSRect(x: 118, y: 282, width: 652, height: 72)
+        previewCode.frame = NSRect(x: 118, y: 184, width: 652, height: 62)
         main.addSubview(previewCode)
 
-        previewTitle = text("Your label preview", 22, .black, .regular)
-        previewTitle.font = NSFont.monospacedSystemFont(ofSize: 22, weight: .regular)
+        previewTitle = text("Your label preview", 24, .black, .bold)
         previewTitle.alignment = .center
-        previewTitle.frame = NSRect(x: 118, y: 240, width: 652, height: 34)
+        previewTitle.frame = NSRect(x: 118, y: 148, width: 652, height: 34)
         main.addSubview(previewTitle)
 
         let copies = text("Copies:", 15, .white, .semibold)
         copies.alignment = .right
-        copies.frame = NSRect(x: 90, y: 116, width: 115, height: 28)
+        copies.frame = NSRect(x: 92, y: 38, width: 115, height: 28)
         main.addSubview(copies)
 
         copiesField = NSTextField(string: "1")
-        copiesField.frame = NSRect(x: 212, y: 114, width: 50, height: 30)
+        copiesField.frame = NSRect(x: 214, y: 36, width: 50, height: 30)
         copiesField.alignment = .center
         main.addSubview(copiesField)
 
         let test = btn("Test Label", #selector(testLabel))
-        test.frame = NSRect(x: 602, y: 112, width: 110, height: 34)
+        test.frame = NSRect(x: 602, y: 34, width: 110, height: 34)
         main.addSubview(test)
 
         let print = btn("🖨  Print", #selector(printLabel))
-        print.frame = NSRect(x: 730, y: 112, width: 120, height: 34)
+        print.frame = NSRect(x: 730, y: 34, width: 120, height: 34)
         main.addSubview(print)
 
-        let hint = text("ⓘ  Connect this Mac to the printer by USB or pair it with a GX430T Print Host.", 13, .lightGray, .regular)
-        hint.frame = NSRect(x: 58, y: 56, width: 760, height: 28)
-        main.addSubview(hint)
+        return main
+    }
 
-        let product = text("GX430T Mac Control", 11, .gray, .regular)
-        product.alignment = .right
-        product.frame = NSRect(x: 660, y: 22, width: 190, height: 24)
-        main.addSubview(product)
+    func buildUploadQueueView() -> NSView {
+        let main = NSView(frame: NSRect(x: 0, y: 0, width: 895, height: 760))
+        main.autoresizingMask = [.width, .height]
 
-        root.addSubview(sidebar)
-        root.addSubview(main)
-        window.contentView = root
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        updatePreview()
+        let mainTitle = text("GX430T", 18, .white, .bold)
+        mainTitle.frame = NSRect(x: 26, y: 704, width: 240, height: 30)
+        main.addSubview(mainTitle)
+
+        let h = text("Upload Queue", 38, .white, .bold)
+        h.frame = NSRect(x: 38, y: 638, width: 520, height: 50)
+        main.addSubview(h)
+
+        let sub = text("Excel / CSV batch printing in ordered queue.", 16, .lightGray, .semibold)
+        sub.frame = NSRect(x: 40, y: 612, width: 520, height: 28)
+        main.addSubview(sub)
+
+        let topCard = panel(NSRect(x: 38, y: 508, width: 812, height: 84), radius: 18)
+        main.addSubview(topCard)
+
+        uploadButton = btn("Choose Excel / CSV", #selector(uploadSpreadsheet))
+        uploadButton.frame = NSRect(x: 58, y: 532, width: 178, height: 36)
+        main.addSubview(uploadButton)
+
+        let openQueue = btn("Open Queue", #selector(openQueueBrowser))
+        openQueue.frame = NSRect(x: 252, y: 532, width: 130, height: 36)
+        main.addSubview(openQueue)
+
+        let refresh = btn("Refresh Queue", #selector(refreshQueueStatus))
+        refresh.frame = NSRect(x: 398, y: 532, width: 140, height: 36)
+        main.addSubview(refresh)
+
+        let printNext = btn("Print Next", #selector(queuePrintNext))
+        printNext.frame = NSRect(x: 554, y: 532, width: 120, height: 36)
+        main.addSubview(printNext)
+
+        let printAll = btn("Print All", #selector(queuePrintAll))
+        printAll.frame = NSRect(x: 690, y: 532, width: 120, height: 36)
+        main.addSubview(printAll)
+
+        queueStatus = text("Queue ready. Upload .xlsx or .csv.", 15, .lightGray, .semibold)
+        queueStatus.frame = NSRect(x: 46, y: 474, width: 804, height: 26)
+        main.addSubview(queueStatus)
+
+        let logCard = panel(NSRect(x: 38, y: 74, width: 812, height: 388), radius: 18)
+        main.addSubview(logCard)
+
+        queueLog = NSTextView(frame: NSRect(x: 58, y: 94, width: 772, height: 348))
+        queueLog.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        queueLog.textColor = .white
+        queueLog.backgroundColor = .clear
+        queueLog.isEditable = false
+        queueLog.string = "Native Upload Queue\n\nAccepted columns:\nbarcode, sku, style code, item code, codice, EAN, quantity, qty, qta, description, brand, order, ordine, sequence\n\nRows print in file order. Quantity expands one row into multiple labels."
+        main.addSubview(queueLog)
+
+        return main
     }
 
     func panel(_ frame: NSRect, radius: CGFloat) -> NSView {
@@ -194,10 +280,21 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         parent.addSubview(item)
     }
 
+    @objc func showQuickPrint() {
+        quickView.isHidden = false
+        queueView.isHidden = true
+    }
+
+    @objc func showUploadQueue() {
+        quickView.isHidden = true
+        queueView.isHidden = false
+        startQueueHost()
+        refreshQueueStatus()
+    }
+
     @objc func modeChanged() {
         let labels = ["Text", "Code 128", "Code 39", "QR"]
-        let index = max(0, modeControl.selectedSegment)
-        mode = labels[index]
+        mode = labels[max(0, modeControl.selectedSegment)]
         updatePreview()
     }
 
@@ -228,25 +325,11 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
     }
 
     func refreshPrinter() {
-        let task = Process()
-        task.launchPath = "/usr/bin/lpstat"
-        task.arguments = ["-p"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let out = String(data: data, encoding: .utf8) ?? ""
-            if out.uppercased().contains("GX430") || out.uppercased().contains("ZEBRA") {
-                statusLabel.stringValue = "🖨  GX430T Ready"
-                statusLabel.textColor = .systemGreen
-            } else {
-                statusLabel.stringValue = "🖨  GX430T Offline"
-                statusLabel.textColor = .lightGray
-            }
-        } catch {
+        let result = run("/usr/bin/lpstat", ["-p"])
+        if result.uppercased().contains("GX430") || result.uppercased().contains("ZEBRA") {
+            statusLabel.stringValue = "🖨  GX430T Ready"
+            statusLabel.textColor = .systemGreen
+        } else {
             statusLabel.stringValue = "🖨  GX430T Offline"
             statusLabel.textColor = .lightGray
         }
@@ -277,32 +360,110 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         let temp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gx430t-label.zpl")
         try? labelZPL().write(to: temp, atomically: true, encoding: .utf8)
 
-        let task = Process()
-        task.launchPath = "/usr/bin/lp"
-        task.arguments = ["-o", "raw", temp.path]
-        do {
-            try task.run()
-        } catch {
-            NSSound.beep()
+        let copies = max(1, Int(copiesField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 1)
+        for _ in 0..<copies {
+            _ = run("/usr/bin/lp", ["-o", "raw", temp.path])
         }
     }
 
-    @objc func openUploadQueue() {
+    @objc func uploadSpreadsheet() {
+        startQueueHost()
+
+        let panel = NSOpenPanel()
+        panel.title = "Choose Excel or CSV"
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["csv", "txt", "xlsx"]
+
+        if panel.runModal() == .OK, let url = panel.url {
+            queueStatus.stringValue = "Uploading \(url.lastPathComponent)…"
+            let output = runGX(["upload", url.path])
+            queueLog.string = "UPLOAD RESULT\n\n\(output)\n\n" + queueLog.string
+            refreshQueueStatus()
+        }
+    }
+
+    @objc func refreshQueueStatus() {
+        startQueueHost()
+        let output = runGX(["status"])
+        queueLog.string = "QUEUE STATUS\n\n\(output)"
+        if output.contains("\"queued\"") {
+            queueStatus.stringValue = "Queue refreshed."
+            queueStatus.textColor = .systemGreen
+        } else {
+            queueStatus.stringValue = "Queue status unavailable. Check local host."
+            queueStatus.textColor = .systemOrange
+        }
+    }
+
+    @objc func queuePrintNext() {
+        startQueueHost()
+        let output = runGX(["print-next"])
+        queueLog.string = "PRINT NEXT\n\n\(output)\n\n" + queueLog.string
+        refreshQueueStatus()
+    }
+
+    @objc func queuePrintAll() {
+        startQueueHost()
+        let output = runGX(["print-all"])
+        queueLog.string = "PRINT ALL\n\n\(output)\n\n" + queueLog.string
+        refreshQueueStatus()
+    }
+
+    @objc func openQueueBrowser() {
+        startQueueHost()
+        if let url = URL(string: "http://127.0.0.1:\(port)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func startQueueHost() {
+        _ = runGX(["start-bg"])
+    }
+
+    func gxRoot() -> String {
+        let bundle = Bundle.main.bundleURL.path
+        let repoRoot = URL(fileURLWithPath: bundle)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .path
+        return repoRoot
+    }
+
+    func gxctlPath() -> String {
         let candidates = [
             "/usr/local/gx430t/bin/gx430tctl",
-            "\(FileManager.default.currentDirectoryPath)/bin/gx430tctl"
+            "\(gxRoot())/bin/gx430tctl"
         ]
-        for path in candidates {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                let task = Process()
-                task.launchPath = path
-                task.arguments = ["start-bg"]
-                try? task.run()
-                break
+        for c in candidates {
+            if FileManager.default.isExecutableFile(atPath: c) {
+                return c
             }
         }
-        if let url = URL(string: "http://127.0.0.1:9430") {
-            NSWorkspace.shared.open(url)
+        return "\(gxRoot())/bin/gx430tctl"
+    }
+
+    func runGX(_ args: [String]) -> String {
+        return run(gxctlPath(), args)
+    }
+
+    func run(_ launchPath: String, _ args: [String]) -> String {
+        let task = Process()
+        task.launchPath = launchPath
+        task.arguments = args
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+        do {
+            try task.run()
+            task.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            return String(data: data, encoding: .utf8) ?? ""
+        } catch {
+            return "ERROR: \(error.localizedDescription)\nPATH: \(launchPath)\nARGS: \(args.joined(separator: " "))"
         }
     }
 }

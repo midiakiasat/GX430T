@@ -1,0 +1,12 @@
+{
+"product": "GX430T Mac Control",
+"version": "0.3.1",
+"move": "094",
+"primary_ui": "native Mac quick print UI",
+"native_upload_queue_panel": true,
+"upload_formats": ["csv", "xlsx"],
+"queue_order": "spreadsheet order or order/ordine/sequence column",
+"quantity_expansion_verified": true,
+"host_verified": true,
+"created_at": "2026-07-16T19:31:22Z"
+}
