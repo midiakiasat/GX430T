@@ -351,3 +351,185 @@ struct GX430TiPhoneRootView: View {
         }
     }
 }
+
+
+struct GX430TiPhoneRootWithQueueView: View {
+    var body: some View {
+        TabView {
+            GX430TiPhoneRootView()
+                .tabItem { Label("Print", systemImage: "printer") }
+
+            GX430TiPhoneUploadQueueView()
+                .tabItem { Label("Queue", systemImage: "tray.and.arrow.up") }
+        }
+    }
+}
+
+
+import UniformTypeIdentifiers
+
+struct GX430TiPhoneUploadQueueView: View {
+    @State private var host: String = UserDefaults.standard.string(forKey: "GX430T_HOST") ?? "http://127.0.0.1:9430"
+    @State private var status: String = "Ready"
+    @State private var log: String = "Upload CSV/XLSX, refresh queue, print next, or print all.\n\nFor iPhone, set host to the Mac Print Host LAN address, for example:\nhttp://192.168.1.20:9430"
+    @State private var showImporter = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Print Host")) {
+                    TextField("http://Mac-IP:9430", text: $host)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                    Button("Save Host") {
+                        UserDefaults.standard.set(host, forKey: "GX430T_HOST")
+                        status = "Host saved"
+                    }
+                }
+
+                Section(header: Text("Upload Queue")) {
+                    Button("Choose Excel / CSV") {
+                        showImporter = true
+                    }
+                    Button("Refresh Queue") {
+                        request(path: "/api/state")
+                    }
+                    Button("Print Next") {
+                        post(path: "/api/print-next")
+                    }
+                    Button("Print All") {
+                        post(path: "/api/print-all")
+                    }
+                }
+
+                Section(header: Text("Status")) {
+                    Text(status)
+                        .font(.headline)
+                    ScrollView {
+                        Text(log)
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 220)
+                }
+            }
+            .navigationTitle("Upload Queue")
+        }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [
+                UTType.commaSeparatedText,
+                UTType(filenameExtension: "csv")!,
+                UTType(filenameExtension: "txt")!,
+                UTType(filenameExtension: "xlsx")!
+            ],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                upload(url: url)
+            case .failure(let error):
+                status = "Import failed"
+                log = error.localizedDescription
+            }
+        }
+    }
+
+    func normalizedHost() -> String {
+        var h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !h.hasPrefix("http://") && !h.hasPrefix("https://") {
+            h = "http://" + h
+        }
+        return h.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    func request(path: String) {
+        guard let url = URL(string: normalizedHost() + path) else {
+            status = "Bad host"
+            return
+        }
+        status = "Requesting…"
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    status = "Failed"
+                    log = error.localizedDescription
+                    return
+                }
+                status = "OK"
+                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
+            }
+        }.resume()
+    }
+
+    func post(path: String) {
+        guard let url = URL(string: normalizedHost() + path) else {
+            status = "Bad host"
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        status = "Sending…"
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    status = "Failed"
+                    log = error.localizedDescription
+                    return
+                }
+                status = "OK"
+                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
+            }
+        }.resume()
+    }
+
+    func upload(url: URL) {
+        let access = url.startAccessingSecurityScopedResource()
+        defer {
+            if access { url.stopAccessingSecurityScopedResource() }
+        }
+
+        guard let data = try? Data(contentsOf: url) else {
+            status = "Could not read file"
+            return
+        }
+
+        guard let endpoint = URL(string: normalizedHost() + "/api/upload") else {
+            status = "Bad host"
+            return
+        }
+
+        let boundary = "GX430TBoundary\(UUID().uuidString)"
+        var body = Data()
+        let filename = url.lastPathComponent
+        let contentType = filename.lowercased().hasSuffix(".xlsx")
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "text/csv"
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var req = URLRequest(url: endpoint)
+        req.httpMethod = "POST"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+
+        status = "Uploading \(filename)…"
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    status = "Upload failed"
+                    log = error.localizedDescription
+                    return
+                }
+                status = "Uploaded"
+                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
+            }
+        }.resume()
+    }
+}
+

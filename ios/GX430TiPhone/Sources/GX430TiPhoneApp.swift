@@ -7,7 +7,7 @@ struct GX430TiPhoneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            GX430TiPhoneRootView()
+            GX430TiPhoneRootWithQueueView()
                 .environmentObject(model)
         }
     }

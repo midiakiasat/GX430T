@@ -3,6 +3,7 @@ import Foundation
 
 final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelegate {
     var window: NSWindow!
+    var statusItem: NSStatusItem!
 
     var mainRoot: NSView!
     var quickView: NSView!
@@ -24,6 +25,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow()
+        installStatusBarMenu()
         refreshPrinter()
     }
 
@@ -40,7 +42,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
             defer: false
         )
         window.center()
-        window.title = "GX430T Mac Control v0.3.1"
+        window.title = "GX430T Mac Control v0.3.2"
         window.minSize = NSSize(width: 980, height: 640)
 
         let root = NSView(frame: frame)
@@ -278,6 +280,42 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         let item = text("\(icon)  \(label)", 15, .lightGray, .semibold)
         item.frame = NSRect(x: 34, y: y, width: 210, height: 28)
         parent.addSubview(item)
+    }
+
+
+    func installStatusBarMenu() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem.button {
+            button.title = "GX430T"
+            button.image = NSImage(systemSymbolName: "printer", accessibilityDescription: "GX430T")
+        }
+
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Open GX430T", action: #selector(openMainWindow), keyEquivalent: "o"))
+        menu.addItem(NSMenuItem(title: "Upload Queue", action: #selector(showUploadQueueFromMenu), keyEquivalent: "u"))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Print Next Queue Label", action: #selector(queuePrintNext), keyEquivalent: "n"))
+        menu.addItem(NSMenuItem(title: "Print All Queued Labels", action: #selector(queuePrintAll), keyEquivalent: "a"))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Open Queue Browser", action: #selector(openQueueBrowser), keyEquivalent: "b"))
+        menu.addItem(NSMenuItem(title: "Refresh Printer", action: #selector(refreshPrinterAction), keyEquivalent: "r"))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        statusItem.menu = menu
+    }
+
+    @objc func openMainWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func showUploadQueueFromMenu() {
+        openMainWindow()
+        showUploadQueue()
+    }
+
+    @objc func quitApp() {
+        NSApp.terminate(nil)
     }
 
     @objc func showQuickPrint() {
