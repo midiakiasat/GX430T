@@ -371,7 +371,7 @@ import UniformTypeIdentifiers
 struct GX430TiPhoneUploadQueueView: View {
     @State private var host: String = UserDefaults.standard.string(forKey: "GX430T_HOST") ?? "http://127.0.0.1:9430"
     @State private var status: String = "Ready"
-    @State private var log: String = "Upload CSV/XLSX, refresh queue, print next, or print all.\n\nFor iPhone, set host to the Mac Print Host LAN address, for example:\nhttp://192.168.1.20:9430"
+    @State private var log: String = "Upload CSV/TSV/XLSX/ODS, refresh queue, print next, or print all.\n\nFor iPhone, set host to the Mac Print Host LAN address, for example:\nhttp://192.168.1.20:9430"
     @State private var showImporter = false
 
     var body: some View {
@@ -388,7 +388,7 @@ struct GX430TiPhoneUploadQueueView: View {
                 }
 
                 Section(header: Text("Upload Queue")) {
-                    Button("Choose Excel / CSV") {
+                    Button("Choose Sheet File") {
                         showImporter = true
                     }
                     Button("Refresh Queue") {
@@ -421,7 +421,9 @@ struct GX430TiPhoneUploadQueueView: View {
                 UTType.commaSeparatedText,
                 UTType(filenameExtension: "csv")!,
                 UTType(filenameExtension: "txt")!,
-                UTType(filenameExtension: "xlsx")!
+                UTType(filenameExtension: "tsv")!,
+                UTType(filenameExtension: "xlsx")!,
+                UTType(filenameExtension: "ods")!
             ],
             allowsMultipleSelection: false
         ) { result in

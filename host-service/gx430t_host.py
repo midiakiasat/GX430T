@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
 import argparse
 import csv
 import html
@@ -8,494 +6,571 @@ import io
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
-import uuid
+import webbrowser
 import zipfile
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from xml.etree import ElementTree as ET
+from decimal import Decimal, InvalidOperation
 
-VERSION = "0.3.0"
-DEFAULT_PORT = int(os.environ.get("GX430T_PORT", "9430"))
-BASE = Path(os.environ.get("GX430T_HOME", str(Path.home() / ".gx430t"))).expanduser()
-DB = BASE / "queue.sqlite3"
-UPLOADS = BASE / "uploads"
-NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+VERSION = "0.3.3"
+PORT = int(os.environ.get("GX430T_PORT", "9430"))
 
 BARCODE_KEYS = [
-    "barcode", "bar code", "codice", "codice a barre", "ean", "ean13",
-    "code128", "sku", "style", "style code", "article", "articolo",
-    "item", "item code", "product code", "codice articolo"
+    "barcode", "bar code", "codice", "code", "ean", "gtin", "sku",
+    "style code", "style", "item code", "product code", "article",
+    "articolo", "ref", "reference", "id"
 ]
-TITLE_KEYS = ["title", "name", "nome", "product name", "descrizione", "description", "brand", "marchio"]
-QTY_KEYS = ["qty", "quantity", "qta", "quantita", "quantità", "copies", "copie"]
-ORDER_KEYS = ["order", "ordine", "row", "riga", "sequence", "seq", "priority"]
+TITLE_KEYS = ["title", "name", "description", "descrizione", "brand", "label", "product"]
+QTY_KEYS = ["quantity", "qty", "qta", "quantita", "quantità", "copies", "copy"]
+ORDER_KEYS = ["order", "ordine", "sequence", "seq", "priority", "row", "riga", "position"]
 
-def ensure() -> None:
-    BASE.mkdir(parents=True, exist_ok=True)
-    UPLOADS.mkdir(parents=True, exist_ok=True)
+def gx_home():
+    return Path(os.environ.get("GX430T_HOME", str(Path.home() / ".gx430t")))
 
-def db() -> sqlite3.Connection:
-    ensure()
-    c = sqlite3.connect(DB)
-    c.row_factory = sqlite3.Row
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS jobs (
-          id TEXT PRIMARY KEY,
-          created INTEGER,
-          position INTEGER,
-          source_file TEXT,
-          source_row INTEGER,
-          barcode TEXT,
-          title TEXT,
-          status TEXT,
-          printed INTEGER,
-          last_error TEXT,
-          zpl TEXT
-        )
-        """
+def db_path():
+    h = gx_home()
+    h.mkdir(parents=True, exist_ok=True)
+    (h / "uploads").mkdir(parents=True, exist_ok=True)
+    return h / "queue.sqlite3"
+
+def connect():
+    con = sqlite3.connect(str(db_path()))
+    con.row_factory = sqlite3.Row
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created REAL NOT NULL,
+      position REAL NOT NULL,
+      source_file TEXT,
+      source_row INTEGER,
+      barcode TEXT NOT NULL,
+      title TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      printed REAL,
+      last_error TEXT,
+      zpl TEXT NOT NULL
     )
-    c.commit()
-    return c
+    """)
+    con.commit()
+    return con
 
-def key(s: object) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(s or "").strip().lower()).strip()
+def clean_key(x):
+    return re.sub(r"\s+", " ", str(x or "").strip().lower())
 
-def choose(headers, candidates):
-    by_key = {key(h): h for h in headers}
-    for c in candidates:
-        if key(c) in by_key:
-            return by_key[key(c)]
-    for h in headers:
-        hk = key(h)
-        for c in candidates:
-            ck = key(c)
-            if ck and (ck in hk or hk in ck):
-                return h
-    return None
+def nonempty(v):
+    return str(v or "").strip()
 
-def to_qty(v: object) -> int:
-    try:
-        return max(1, min(999, int(float(str(v).replace(",", ".").strip()))))
-    except Exception:
-        return 1
+def numeric_like(v):
+    s = nonempty(v)
+    return bool(re.fullmatch(r"[0-9A-Za-z._\-]+", s)) and not any(c.isspace() for c in s)
 
-def make_zpl(barcode: str, title: str = "") -> str:
-    b = str(barcode or "").replace("^", " ").replace("~", " ").replace("\\", "/").strip()
-    t = str(title or "GX430T LABEL").replace("^", " ").replace("~", " ").replace("\\", "/").strip()[:44]
-    return (
-        "^XA\n"
-        "^CI28\n"
-        "^PW609\n"
-        "^LL203\n"
-        f"^FO30,18^A0N,28,28^FD{t}^FS\n"
-        f"^FO30,58^BY2,2.6,82^BCN,82,Y,N,N^FD{b}^FS\n"
-        f"^FO30,168^A0N,22,22^FD{b}^FS\n"
-        "^XZ\n"
-    )
+def is_header_row(row):
+    vals = [clean_key(x) for x in row if nonempty(x)]
+    if not vals:
+        return False
+    joined = " ".join(vals)
+    known = BARCODE_KEYS + TITLE_KEYS + QTY_KEYS + ORDER_KEYS
+    if any(k in joined for k in known):
+        return True
+    if len(vals) == 1 and numeric_like(vals[0]):
+        return False
+    if len(vals) <= 2 and all(numeric_like(v) for v in vals):
+        return False
+    return False
 
-def normalize(rows, source_file: str):
+def matrix_to_dict_rows(matrix):
+    rows = []
+    for r in matrix:
+        vals = [nonempty(x) for x in r]
+        if any(vals):
+            rows.append(vals)
     if not rows:
         return []
-    headers = list(rows[0].keys())
-    barcode_key = choose(headers, BARCODE_KEYS)
-    title_key = choose(headers, TITLE_KEYS)
-    qty_key = choose(headers, QTY_KEYS)
-    order_key = choose(headers, ORDER_KEYS)
+    if is_header_row(rows[0]):
+        headers = [clean_key(x) or f"column_{i+1}" for i, x in enumerate(rows[0])]
+        out = []
+        for i, row in enumerate(rows[1:], start=2):
+            d = {}
+            for j, val in enumerate(row):
+                key = headers[j] if j < len(headers) else f"column_{j+1}"
+                d[key] = val
+            d["_source_row"] = i
+            out.append(d)
+        return out
+    out = []
+    for i, row in enumerate(rows, start=1):
+        d = {"barcode": row[0], "_source_row": i}
+        if len(row) > 1:
+            d["title"] = row[1]
+        if len(row) > 2:
+            d["quantity"] = row[2]
+        if len(row) > 3:
+            d["order"] = row[3]
+        out.append(d)
+    return out
 
-    if not barcode_key:
-        for h in headers:
-            if any(str(r.get(h, "")).strip() for r in rows):
-                barcode_key = h
-                break
-
-    output = []
-    for row_index, row in enumerate(rows, 1):
-        code = str(row.get(barcode_key or "", "")).strip()
-        if not code:
-            continue
-
-        q = to_qty(row.get(qty_key, "1")) if qty_key else 1
-
+def read_delimited(path):
+    text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    ext = Path(path).suffix.lower()
+    sample = text[:4096]
+    if ext == ".tsv":
+        delim = "\t"
+    else:
         try:
-            order = int(float(str(row.get(order_key, row_index)).replace(",", ".").strip())) if order_key else row_index
+            delim = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
         except Exception:
-            order = row_index
+            if "\t" in sample:
+                delim = "\t"
+            elif ";" in sample:
+                delim = ";"
+            else:
+                delim = ","
+    reader = csv.reader(io.StringIO(text), delimiter=delim)
+    return matrix_to_dict_rows(list(reader))
 
-        title = str(row.get(title_key or "", "")).strip() if title_key else ""
+def xlsx_shared_strings(z):
+    names = z.namelist()
+    if "xl/sharedStrings.xml" not in names:
+        return []
+    root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+    ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    out = []
+    for si in root.findall(".//a:si", ns):
+        texts = [t.text or "" for t in si.findall(".//a:t", ns)]
+        out.append("".join(texts))
+    return out
 
-        for _ in range(q):
-            output.append({
-                "order": order,
-                "source_row": row_index,
-                "barcode": code,
-                "title": title,
-                "source_file": source_file,
-            })
-
-    output.sort(key=lambda r: (r["order"], r["source_row"], r["barcode"]))
-    return output
-
-def parse_csv(data: bytes, name: str):
-    text = data.decode("utf-8-sig", errors="replace")
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
-    except Exception:
-        dialect = csv.excel
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-    rows = []
-    for r in reader:
-        rows.append({str(k or "").strip(): str(v or "").strip() for k, v in r.items()})
-    return normalize(rows, name)
-
-def xlsx_cell(c, shared):
-    v = c.find("a:v", NS)
+def xlsx_cell_value(cell, shared):
+    t = cell.attrib.get("t")
+    v = cell.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}v")
     if v is None:
-        t = c.find("a:is/a:t", NS)
-        return t.text if t is not None and t.text else ""
+        inline = cell.find(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t")
+        return inline.text if inline is not None and inline.text is not None else ""
     raw = v.text or ""
-    if c.attrib.get("t") == "s":
+    if t == "s":
         try:
             return shared[int(raw)]
         except Exception:
             return raw
     return raw
 
-def parse_xlsx(data: bytes, name: str):
-    with zipfile.ZipFile(io.BytesIO(data)) as z:
-        shared = []
-        if "xl/sharedStrings.xml" in z.namelist():
-            root = ET.fromstring(z.read("xl/sharedStrings.xml"))
-            for si in root.findall("a:si", NS):
-                shared.append("".join((t.text or "") for t in si.findall(".//a:t", NS)))
+def col_index(cell_ref):
+    letters = "".join(ch for ch in cell_ref if ch.isalpha()).upper()
+    n = 0
+    for ch in letters:
+        n = n * 26 + (ord(ch) - 64)
+    return max(0, n - 1)
 
-        sheets = sorted(n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))
-        if not sheets:
-            return []
+def read_xlsx(path):
+    with zipfile.ZipFile(path) as z:
+        shared = xlsx_shared_strings(z)
+        sheet = "xl/worksheets/sheet1.xml"
+        if sheet not in z.namelist():
+            sheets = [n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+            if not sheets:
+                return []
+            sheet = sorted(sheets)[0]
+        root = ET.fromstring(z.read(sheet))
+        ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        matrix = []
+        for row in root.findall(".//a:sheetData/a:row", ns):
+            vals = []
+            for c in row.findall("a:c", ns):
+                idx = col_index(c.attrib.get("r", "A1"))
+                while len(vals) <= idx:
+                    vals.append("")
+                vals[idx] = xlsx_cell_value(c, shared)
+            matrix.append(vals)
+        return matrix_to_dict_rows(matrix)
 
-        root = ET.fromstring(z.read(sheets[0]))
-        table = []
-        for row in root.findall(".//a:sheetData/a:row", NS):
-            values = []
-            for c in row.findall("a:c", NS):
-                ref = c.attrib.get("r", "")
-                letters = "".join(ch for ch in ref if ch.isalpha())
-                col = 0
-                for ch in letters:
-                    col = col * 26 + ord(ch.upper()) - 64
-                while len(values) < max(col - 1, 0):
-                    values.append("")
-                values.append(xlsx_cell(c, shared))
-            table.append(values)
+def ods_cell_text(cell):
+    texts = []
+    for elem in cell.iter():
+        if elem.text:
+            texts.append(elem.text)
+    return " ".join(t.strip() for t in texts if t.strip())
 
-    table = [r for r in table if any(str(x).strip() for x in r)]
-    if not table:
-        return []
+def read_ods(path):
+    matrix = []
+    with zipfile.ZipFile(path) as z:
+        root = ET.fromstring(z.read("content.xml"))
+        ns_table = "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}"
+        for table in root.iter(ns_table + "table"):
+            for row in table.iter(ns_table + "table-row"):
+                repeat_row = int(row.attrib.get(ns_table + "number-rows-repeated", "1"))
+                vals = []
+                for cell in list(row):
+                    if not cell.tag.endswith("table-cell"):
+                        continue
+                    repeat = int(cell.attrib.get(ns_table + "number-columns-repeated", "1"))
+                    val = ods_cell_text(cell)
+                    if repeat > 50 and not val:
+                        repeat = 1
+                    for _ in range(repeat):
+                        vals.append(val)
+                if any(nonempty(x) for x in vals):
+                    for _ in range(min(repeat_row, 20)):
+                        matrix.append(vals)
+            if matrix:
+                break
+    return matrix_to_dict_rows(matrix)
 
-    headers = [str(x).strip() or f"Column {i+1}" for i, x in enumerate(table[0])]
-    rows = []
-    for r in table[1:]:
-        rows.append({h: (str(r[i]).strip() if i < len(r) else "") for i, h in enumerate(headers)})
-    return normalize(rows, name)
+def read_rows(path):
+    ext = Path(path).suffix.lower()
+    if ext == ".xlsx":
+        return read_xlsx(path)
+    if ext == ".ods":
+        return read_ods(path)
+    if ext in [".csv", ".tsv", ".txt"]:
+        return read_delimited(path)
+    return read_delimited(path)
 
-def parse_file(data: bytes, name: str):
-    if name.lower().endswith(".xlsx") or data[:2] == b"PK":
-        return parse_xlsx(data, name)
-    return parse_csv(data, name)
+def first_value(d, keys):
+    lower = {clean_key(k): v for k, v in d.items()}
+    for k in keys:
+        ck = clean_key(k)
+        if ck in lower and nonempty(lower[ck]):
+            return nonempty(lower[ck])
+    return ""
 
-def next_position(c):
-    row = c.execute("SELECT COALESCE(MAX(position), 0) + 1 AS p FROM jobs").fetchone()
-    return int(row["p"])
+def qty_value(d):
+    raw = first_value(d, QTY_KEYS)
+    if not raw:
+        return 1
+    try:
+        return max(1, int(float(str(raw).replace(",", "."))))
+    except Exception:
+        return 1
 
-def enqueue(rows):
-    c = db()
-    pos = next_position(c)
-    added = 0
-    for r in rows:
-        c.execute(
-            "INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                uuid.uuid4().hex,
-                int(time.time()),
-                pos,
-                r["source_file"],
-                r["source_row"],
-                r["barcode"],
-                r["title"],
-                "queued",
-                0,
-                "",
-                make_zpl(r["barcode"], r["title"]),
-            ),
-        )
-        pos += 1
-        added += 1
-    c.commit()
-    c.close()
-    return added
+def order_value(d, fallback):
+    raw = first_value(d, ORDER_KEYS)
+    if not raw:
+        return float(fallback)
+    try:
+        return float(str(raw).replace(",", "."))
+    except Exception:
+        return float(fallback)
 
-def all_jobs(status=None, limit=1000):
-    c = db()
-    if status:
-        rows = c.execute("SELECT * FROM jobs WHERE status=? ORDER BY position LIMIT ?", (status, limit)).fetchall()
-    else:
-        rows = c.execute("SELECT * FROM jobs ORDER BY position LIMIT ?", (limit,)).fetchall()
-    c.close()
-    return [dict(r) for r in rows]
 
-def counts():
-    c = db()
-    out = {}
-    for s in ("queued", "printed", "failed"):
-        out[s] = int(c.execute("SELECT COUNT(*) AS c FROM jobs WHERE status=?", (s,)).fetchone()["c"])
-    out["total"] = int(c.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"])
-    c.close()
+def normalize_barcode_value(v):
+    s = nonempty(v)
+    if not s:
+        return ""
+    s = s.strip()
+    # Excel/Google Sheets may expose barcode-looking numeric cells as 9.87654321E8.
+    # Convert integer-valued scientific/float notation back to plain digits.
+    if re.fullmatch(r"[+-]?\d+(\.\d+)?[eE][+-]?\d+", s) or re.fullmatch(r"[+-]?\d+\.0+", s):
+        try:
+            d = Decimal(s)
+            if d == d.to_integral_value():
+                return format(d.quantize(Decimal(1)), "f")
+        except (InvalidOperation, ValueError):
+            pass
+    if re.fullmatch(r"\d+\.0+", s):
+        return s.split(".", 1)[0]
+    return s
+
+def fallback_barcode(d):
+    for k, v in d.items():
+        if str(k).startswith("_"):
+            continue
+        val = normalize_barcode_value(v)
+        if val:
+            return val
+    return ""
+
+def zpl_for(barcode, title=""):
+    safe = str(barcode).replace("^", " ").replace("~", " ")
+    label = str(title or barcode).replace("^", " ").replace("~", " ")
+    return f"^XA\n^CI28\n^FO35,42^BY2,2.7,92^BCN,92,Y,N,N^FD{safe}^FS\n^FO35,164^A0N,26,26^FD{label}^FS\n^XZ\n"
+
+def expand_jobs(rows, source_file):
+    jobs = []
+    seq = 0
+    for idx, d in enumerate(rows, start=1):
+        source_row = int(d.get("_source_row", idx) or idx)
+        barcode = first_value(d, BARCODE_KEYS) or fallback_barcode(d)
+        barcode = normalize_barcode_value(barcode)
+        if not barcode:
+            continue
+        title = first_value(d, TITLE_KEYS) or barcode
+        qty = qty_value(d)
+        order = order_value(d, idx)
+        for copy in range(qty):
+            seq += 1
+            jobs.append({
+                "position": order + copy * 0.0001 + seq * 0.0000001,
+                "source_file": Path(source_file).name,
+                "source_row": source_row,
+                "barcode": barcode,
+                "title": title,
+                "zpl": zpl_for(barcode, title)
+            })
+    jobs.sort(key=lambda x: (x["position"], x["source_row"]))
+    return jobs
+
+def enqueue_file(path):
+    rows = read_rows(path)
+    jobs = expand_jobs(rows, path)
+    con = connect()
+    with con:
+        for j in jobs:
+            con.execute(
+                "INSERT INTO jobs(created, position, source_file, source_row, barcode, title, status, zpl) VALUES(?,?,?,?,?,?,?,?)",
+                (time.time(), j["position"], j["source_file"], j["source_row"], j["barcode"], j["title"], "queued", j["zpl"])
+            )
+    return {"ok": True, "file": Path(path).name, "rows": len(jobs), "labels": len(jobs)}
+
+def counts(con):
+    out = {"queued": 0, "printed": 0, "error": 0}
+    for r in con.execute("SELECT status, COUNT(*) c FROM jobs GROUP BY status"):
+        out[r["status"]] = r["c"]
     return out
 
-def printer_name():
-    env = os.environ.get("GX430T_PRINTER", "").strip()
-    if env:
-        return env
+def state(limit=100):
+    con = connect()
+    jobs = []
+    for r in con.execute("SELECT * FROM jobs ORDER BY CASE status WHEN 'queued' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, position, id LIMIT ?", (limit,)):
+        jobs.append({k: r[k] for k in r.keys() if k != "zpl"})
+    return {"ok": True, "version": VERSION, "counts": counts(con), "jobs": jobs}
+
+def clear():
+    con = connect()
+    with con:
+        con.execute("DELETE FROM jobs")
+    return {"ok": True, "cleared": True}
+
+def printer_cmd(zpl):
+    tmp = tempfile.NamedTemporaryFile("w", delete=False, suffix=".zpl")
     try:
-        out = subprocess.check_output(["lpstat", "-p"], text=True, stderr=subprocess.DEVNULL)
-        names = [line.split()[1] for line in out.splitlines() if line.startswith("printer ") and len(line.split()) > 1]
-        for n in names:
-            if "GX430" in n.upper() or "ZEBRA" in n.upper():
-                return n
-        return names[0] if names else "GX430T"
-    except Exception:
-        return "GX430T"
+        tmp.write(zpl)
+        tmp.close()
+        p = subprocess.run(["/usr/bin/lp", "-o", "raw", tmp.name], capture_output=True, text=True, timeout=20)
+        if p.returncode != 0:
+            return False, (p.stderr or p.stdout or "lp failed").strip()
+        return True, (p.stdout or "printed").strip()
+    except Exception as e:
+        return False, str(e)
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
 
-def send_to_printer(row):
-    ensure()
-    zpl_path = BASE / "last-label.zpl"
-    zpl_path.write_text(row["zpl"])
-    pr = printer_name()
-    last_error = "no lp/lpr command found"
-    for cmd in (["lp", "-d", pr, "-o", "raw", str(zpl_path)], ["lpr", "-P", pr, "-l", str(zpl_path)]):
-        if shutil.which(cmd[0]):
-            try:
-                subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
-                return True, "sent"
-            except Exception as e:
-                last_error = repr(e)
-    return False, last_error
+def print_next():
+    con = connect()
+    r = con.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY position, id LIMIT 1").fetchone()
+    if not r:
+        return {"ok": True, "printed": 0, "message": "queue empty"}
+    ok, msg = printer_cmd(r["zpl"])
+    with con:
+        if ok:
+            con.execute("UPDATE jobs SET status='printed', printed=?, last_error=NULL WHERE id=?", (time.time(), r["id"]))
+            return {"ok": True, "printed": 1, "id": r["id"], "barcode": r["barcode"], "message": msg}
+        con.execute("UPDATE jobs SET status='error', last_error=? WHERE id=?", (msg, r["id"]))
+        return {"ok": False, "printed": 0, "id": r["id"], "barcode": r["barcode"], "error": msg}
 
-def print_ids(ids):
-    c = db()
-    ok = 0
-    failed = 0
-    for jid in ids:
-        row = c.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
-        if not row:
-            continue
-        good, msg = send_to_printer(dict(row))
-        if good:
-            c.execute("UPDATE jobs SET status='printed', printed=?, last_error='' WHERE id=?", (int(time.time()), jid))
-            ok += 1
+def print_all():
+    printed = 0
+    errors = []
+    while True:
+        con = connect()
+        remaining = con.execute("SELECT COUNT(*) c FROM jobs WHERE status='queued'").fetchone()["c"]
+        if remaining <= 0:
+            break
+        res = print_next()
+        if res.get("printed"):
+            printed += 1
         else:
-            c.execute("UPDATE jobs SET status='failed', last_error=? WHERE id=?", (msg, jid))
-            failed += 1
-    c.commit()
-    c.close()
-    return {"ok": ok, "failed": failed}
+            errors.append(res)
+            break
+    return {"ok": len(errors) == 0, "printed": printed, "errors": errors, "state": state(20)}
 
-PAGE = """<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>GX430T Upload Queue</title>
-<style>
-body{margin:0;background:#111;color:#f6f6f6;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial;padding:24px}
-h1{font-size:42px;margin:0 0 18px}.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
-.card{background:#181818;border:1px solid #333;border-radius:22px;padding:18px}
-button,input{border:0;border-radius:12px;padding:12px;font-weight:800}button{background:#fff;color:#000}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-.kpis div{background:#181818;border:1px solid #333;border-radius:18px;padding:14px;text-transform:uppercase;letter-spacing:.12em;color:#aaa}
-.kpis b{display:block;color:#fff;font-size:34px;letter-spacing:0}
-table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #333;padding:10px;text-align:left}th{color:#aaa;letter-spacing:.12em}
-small{color:#aaa}
-</style>
-</head>
-<body>
-<h1>GX430T Upload Queue</h1>
-<div class="grid">
-  <div class="card">
-    <h2>Upload Excel / CSV</h2>
-    <form id="f"><input type="file" name="file" accept=".csv,.xlsx" required><p><button>UPLOAD TO QUEUE</button></p></form>
-    <small>Secondary batch tool. Native GX430T app remains primary.</small>
-    <h2>Print</h2>
-    <p><button onclick="printNext()">Print next</button> <button onclick="printAll()">Print all</button></p>
-    <p><button onclick="clearQ()">Clear queued</button></p>
-  </div>
-  <main>
-    <div class="kpis">
-      <div>Queued<b id="q">0</b></div><div>Printed<b id="p">0</b></div><div>Failed<b id="fa">0</b></div><div>Total<b id="t">0</b></div>
-    </div>
-    <div class="card">
-      <table><thead><tr><th>#</th><th>Status</th><th>Barcode</th><th>Title</th><th>Source</th></tr></thead><tbody id="rows"></tbody></table>
-    </div>
-  </main>
-</div>
-<script>
-async function api(u,o){let r=await fetch(u,o||{}); if(!r.ok) throw Error(await r.text()); return r.json()}
-async function load(){let s=await api('/api/state'); q.textContent=s.counts.queued;p.textContent=s.counts.printed;fa.textContent=s.counts.failed;t.textContent=s.counts.total;rows.innerHTML=s.jobs.map(j=>`<tr><td>${j.position}</td><td>${j.status}</td><td><b>${escapeHtml(j.barcode)}</b></td><td>${escapeHtml(j.title||'')}</td><td>${escapeHtml(j.source_file||'')} #${j.source_row||''}</td></tr>`).join('')}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-f.onsubmit=async e=>{e.preventDefault(); await fetch('/api/upload',{method:'POST',body:new FormData(f)}); f.reset(); load()}
-async function printNext(){await api('/api/print-next',{method:'POST'});load()}
-async function printAll(){await api('/api/print-all',{method:'POST'});load()}
-async function clearQ(){await api('/api/clear',{method:'POST'});load()}
-load(); setInterval(load,3000)
-</script>
-</body>
-</html>"""
+def save_upload_bytes(filename, data):
+    filename = Path(filename or "upload.csv").name
+    upload_dir = gx_home() / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    dest = upload_dir / f"{int(time.time())}-{filename}"
+    dest.write_bytes(data)
+    return enqueue_file(dest)
 
-def multipart(ctype, data):
-    m = re.search(r"boundary=(.+)", ctype or "")
+def parse_multipart_file(headers, rfile):
+    ctype = headers.get("Content-Type", "")
+    m = re.search(r'boundary=(?:"([^"]+)"|([^;]+))', ctype)
     if not m:
-        return "upload.csv", data
-    boundary = ("--" + m.group(1).strip().strip('"')).encode()
-    for part in data.split(boundary):
-        if b"Content-Disposition" not in part:
+        raise ValueError("missing multipart boundary")
+    boundary = (m.group(1) or m.group(2) or "").strip().encode("utf-8")
+    if not boundary:
+        raise ValueError("empty multipart boundary")
+
+    length = int(headers.get("Content-Length", "0") or "0")
+    if length <= 0:
+        raise ValueError("empty upload")
+
+    body = rfile.read(length)
+    delimiter = b"--" + boundary
+    close_delimiter = delimiter + b"--"
+
+    pos = 0
+    while True:
+        start = body.find(delimiter, pos)
+        if start < 0:
+            break
+
+        part_start = start + len(delimiter)
+
+        if body[part_start:part_start + 2] == b"--":
+            break
+
+        if body[part_start:part_start + 2] == b"\r\n":
+            part_start += 2
+        elif body[part_start:part_start + 1] == b"\n":
+            part_start += 1
+
+        header_end = body.find(b"\r\n\r\n", part_start)
+        sep_len = 4
+        if header_end < 0:
+            header_end = body.find(b"\n\n", part_start)
+            sep_len = 2
+        if header_end < 0:
+            pos = part_start
             continue
-        head, _, body = part.partition(b"\r\n\r\n")
-        disp = head.decode(errors="replace")
-        fn = re.search(r'filename="([^"]+)"', disp)
-        name = fn.group(1) if fn else "upload.csv"
-        return name, body.rstrip(b"\r\n-")
-    return "upload.csv", data
+
+        header_bytes = body[part_start:header_end]
+        header_text = header_bytes.decode("utf-8", errors="replace")
+        data_start = header_end + sep_len
+
+        next_marker = body.find(b"\r\n" + delimiter, data_start)
+        marker_prefix_len = 2
+        if next_marker < 0:
+            next_marker = body.find(b"\n" + delimiter, data_start)
+            marker_prefix_len = 1
+        if next_marker < 0:
+            next_marker = body.find(close_delimiter, data_start)
+            marker_prefix_len = 0
+        if next_marker < 0:
+            raise ValueError("multipart closing boundary not found")
+
+        data_end = next_marker
+        data = body[data_start:data_end]
+
+        if "Content-Disposition" in header_text and 'name="file"' in header_text:
+            fm = re.search(r'filename="([^"]*)"', header_text)
+            filename = Path(fm.group(1) if fm else "upload.csv").name or "upload.csv"
+            if not data:
+                raise ValueError("uploaded file is empty")
+            return filename, data
+
+        pos = next_marker + marker_prefix_len + len(delimiter)
+
+    raise ValueError("missing file field")
+
+def json_bytes(obj):
+    return json.dumps(obj, indent=2, ensure_ascii=False).encode("utf-8")
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        return
-
-    def send_json(self, obj, code=200):
-        data = json.dumps(obj, ensure_ascii=False, indent=2).encode()
-        self.send_response(code)
+    def send_json(self, obj, status=200):
+        data = json_bytes(obj)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
-    def read_body(self):
-        return self.rfile.read(int(self.headers.get("Content-Length", "0") or "0"))
-
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
-        if path in ("/", "/index.html"):
-            data = PAGE.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-        elif path == "/api/health":
-            self.send_json({"ok": True, "version": VERSION, "printer": printer_name()})
-        elif path == "/api/state":
-            self.send_json({"version": VERSION, "printer": printer_name(), "counts": counts(), "jobs": all_jobs()})
-        else:
-            self.send_error(404)
+        if path == "/api/health":
+            self.send_json({"ok": True, "version": VERSION, "formats": ["csv", "tsv", "xlsx", "ods"], "headerless": True})
+            return
+        if path == "/api/state":
+            self.send_json(state())
+            return
+        body = f"""<!doctype html><html><head><meta charset="utf-8"><title>GX430T Upload Queue</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#eee;padding:32px">
+<h1>GX430T Upload Queue</h1>
+<p>Secondary browser surface. Native Mac app, Mac menu bar, and iPhone are primary surfaces.</p>
+<p>Supports CSV, TSV, XLSX, ODS, headerless one-column barcode sheets, quantity expansion, and ordered queue.</p>
+<form method="post" action="/api/upload" enctype="multipart/form-data">
+<input type="file" name="file" accept=".csv,.tsv,.xlsx,.ods,.txt"/>
+<button>Upload</button>
+</form>
+<p><button onclick="fetch('/api/print-next',{{method:'POST'}}).then(r=>r.text()).then(alert)">Print Next</button>
+<button onclick="fetch('/api/print-all',{{method:'POST'}}).then(r=>r.text()).then(alert)">Print All</button>
+<button onclick="fetch('/api/clear',{{method:'POST'}}).then(r=>r.text()).then(alert)">Clear</button></p>
+<pre id="s"></pre>
+<script>async function load(){{s.textContent=await fetch('/api/state').then(r=>r.text())}}; setInterval(load,2000); load();</script>
+</body></html>"""
+        data = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
-        try:
-            path = urllib.parse.urlparse(self.path).path
-            if path == "/api/upload":
-                name, data = multipart(self.headers.get("Content-Type", ""), self.read_body())
-                safe_name = Path(name).name or "upload.csv"
-                saved = UPLOADS / (time.strftime("%Y%m%d-%H%M%S") + "-" + safe_name)
-                ensure()
-                saved.write_bytes(data)
-                rows = parse_file(data, safe_name)
-                labels = enqueue(rows)
-                self.send_json({"ok": True, "rows": len(rows), "labels": labels})
-                return
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/api/upload":
+            try:
+                filename, data = parse_multipart_file(self.headers, self.rfile)
+                self.send_json(save_upload_bytes(filename, data))
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.send_json({"ok": False, "error": str(e), "type": e.__class__.__name__}, 500)
+            return
+        if path == "/api/print-next":
+            self.send_json(print_next())
+            return
+        if path == "/api/print-all":
+            self.send_json(print_all())
+            return
+        if path == "/api/clear":
+            self.send_json(clear())
+            return
+        self.send_json({"ok": False, "error": "not found"}, 404)
 
-            if path == "/api/print-next":
-                queued = all_jobs("queued", 1)
-                self.send_json(print_ids([queued[0]["id"]]) if queued else {"ok": 0, "failed": 0})
-                return
+    def log_message(self, fmt, *args):
+        sys.stderr.write("GX430T " + (fmt % args) + "\n")
 
-            if path == "/api/print-all":
-                queued = all_jobs("queued", 5000)
-                self.send_json(print_ids([x["id"] for x in queued]))
-                return
-
-            if path == "/api/clear":
-                c = db()
-                cur = c.execute("DELETE FROM jobs WHERE status='queued'")
-                c.commit()
-                deleted = cur.rowcount
-                c.close()
-                self.send_json({"deleted": deleted})
-                return
-
-            self.send_error(404)
-        except Exception as e:
-            self.send_json({"ok": False, "error": repr(e)}, 500)
-
-def serve(port: int, open_ui: bool = False):
-    ensure()
-    db().close()
-    print("GX430T_UPLOAD_QUEUE_READY=true", flush=True)
-    print("VERSION=" + VERSION, flush=True)
-    print(f"URL=http://127.0.0.1:{port}", flush=True)
-    if open_ui:
-        subprocess.Popen(["open", f"http://127.0.0.1:{port}"])
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
-
-def main(argv):
+def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd")
-    sv = sub.add_parser("serve")
-    sv.add_argument("--port", type=int, default=DEFAULT_PORT)
-    sv.add_argument("--open", action="store_true")
-    up = sub.add_parser("upload")
-    up.add_argument("file")
+    s = sub.add_parser("serve")
+    s.add_argument("--port", type=int, default=PORT)
+    s.add_argument("--open", action="store_true")
+    u = sub.add_parser("upload")
+    u.add_argument("file")
     sub.add_parser("status")
     sub.add_parser("print-next")
     sub.add_parser("print-all")
     sub.add_parser("clear")
-    args = ap.parse_args(argv)
+    args = ap.parse_args()
 
-    if args.cmd in (None, "serve"):
-        serve(args.port if args.cmd else DEFAULT_PORT, getattr(args, "open", False))
-        return 0
-
-    if args.cmd == "upload":
-        p = Path(args.file)
-        rows = parse_file(p.read_bytes(), p.name)
-        print(json.dumps({"rows": len(rows), "labels": enqueue(rows)}, indent=2))
-        return 0
-
-    if args.cmd == "status":
-        print(json.dumps({"version": VERSION, "counts": counts(), "jobs": all_jobs(limit=50)}, indent=2))
-        return 0
-
-    if args.cmd == "print-next":
-        queued = all_jobs("queued", 1)
-        print(json.dumps(print_ids([queued[0]["id"]]) if queued else {"ok": 0, "failed": 0}, indent=2))
-        return 0
-
-    if args.cmd == "print-all":
-        queued = all_jobs("queued", 5000)
-        print(json.dumps(print_ids([x["id"] for x in queued]), indent=2))
-        return 0
-
-    if args.cmd == "clear":
-        c = db()
-        cur = c.execute("DELETE FROM jobs WHERE status='queued'")
-        c.commit()
-        print(json.dumps({"deleted": cur.rowcount}, indent=2))
-        c.close()
-        return 0
-
-    return 2
+    if args.cmd == "serve":
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+        if args.open:
+            webbrowser.open(f"http://127.0.0.1:{args.port}")
+        print(json.dumps({"ok": True, "version": VERSION, "url": f"http://127.0.0.1:{args.port}"}), flush=True)
+        server.serve_forever()
+    elif args.cmd == "upload":
+        print(json.dumps(enqueue_file(args.file), indent=2))
+    elif args.cmd == "status":
+        print(json.dumps(state(), indent=2))
+    elif args.cmd == "print-next":
+        print(json.dumps(print_next(), indent=2))
+    elif args.cmd == "print-all":
+        print(json.dumps(print_all(), indent=2))
+    elif args.cmd == "clear":
+        print(json.dumps(clear(), indent=2))
+    else:
+        ap.print_help()
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    main()

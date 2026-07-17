@@ -1,0 +1,21 @@
+{
+  "product": "GX430T Mac Control",
+  "version": "0.3.3",
+  "move": "096G",
+  "real_user_files_verified": true,
+  "formats_verified": ["xlsx", "csv", "tsv", "ods"],
+  "headerless_one_column_barcodes": true,
+  "scientific_notation_barcode_normalized": true,
+  "http_upload_verified": true,
+  "http_upload_formats_verified": ["xlsx", "csv", "tsv", "ods"],
+  "binary_safe_multipart_parser": "byte-exact boundary parser",
+  "upload_directory_autocreated": true,
+  "python_cgi_dependency_removed": true,
+  "native_mac_app": true,
+  "mac_status_bar": true,
+  "iphone_upload_queue": true,
+  "mac_build_status": "PASSED",
+  "iphone_build_status": "PASSED",
+  "host_status": "PASSED",
+  "created_at": "2026-07-17T11:25:05Z"
+}

@@ -42,7 +42,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
             defer: false
         )
         window.center()
-        window.title = "GX430T Mac Control v0.3.2"
+        window.title = "GX430T Mac Control v0.3.3"
         window.minSize = NSSize(width: 980, height: 640)
 
         let root = NSView(frame: frame)
@@ -211,7 +211,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         let topCard = panel(NSRect(x: 38, y: 508, width: 812, height: 84), radius: 18)
         main.addSubview(topCard)
 
-        uploadButton = btn("Choose Excel / CSV", #selector(uploadSpreadsheet))
+        uploadButton = btn("Choose Sheet File", #selector(uploadSpreadsheet))
         uploadButton.frame = NSRect(x: 58, y: 532, width: 178, height: 36)
         main.addSubview(uploadButton)
 
@@ -412,7 +412,7 @@ final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelega
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.allowedFileTypes = ["csv", "txt", "xlsx"]
+        panel.allowedFileTypes = ["csv", "txt", "tsv", "xlsx", "ods"]
 
         if panel.runModal() == .OK, let url = panel.url {
             queueStatus.stringValue = "Uploading \(url.lastPathComponent)…"
