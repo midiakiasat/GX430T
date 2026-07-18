@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 import argparse
+import hashlib
+import secrets
+import uuid
 import csv
 import html
 import io
@@ -17,10 +21,33 @@ import zipfile
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from decimal import Decimal, InvalidOperation
 
-VERSION = "0.3.3"
-PORT = int(os.environ.get("GX430T_PORT", "9430"))
+VERSION = os.environ.get("GX430T_VERSION", "0.3.3")
+HOST = os.environ.get("GX430T_HOST_BIND", "0.0.0.0")
+PORT = int(
+    os.environ.get(
+        "GX430T_HOST_PORT",
+        os.environ.get("GX430T_PORT", "43043"),
+    )
+)
+CLI = os.environ.get("GX430T_CLI", "/usr/local/bin/gx430tctl")
+
+CONFIG = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "GX430T"
+    / "host.json"
+)
+
+LOG_DIR = Path.home() / "Library" / "Logs" / "GX430T"
+LOG_FILE = LOG_DIR / "host-jobs.jsonl"
+
+PROTOCOL_VERSION = 1
+MAX_JSON_BODY = 65536
+MAX_UPLOAD_BODY = 50 * 1024 * 1024
 
 BARCODE_KEYS = [
     "barcode", "bar code", "codice", "code", "ean", "gtin", "sku",
@@ -475,102 +502,972 @@ def parse_multipart_file(headers, rfile):
 def json_bytes(obj):
     return json.dumps(obj, indent=2, ensure_ascii=False).encode("utf-8")
 
+def read_config() -> dict[str, Any]:
+    try:
+        payload = json.loads(CONFIG.read_text())
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def write_config(config: dict[str, Any]) -> None:
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+
+    temporary = CONFIG.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+    )
+    temporary.chmod(0o600)
+    temporary.replace(CONFIG)
+
+
+def generate_pairing_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def ensure_config() -> dict[str, Any]:
+    config = read_config()
+    changed = False
+
+    host_name = (
+        os.environ.get("GX430T_HOST_NAME", "").strip()
+        or os.uname().nodename
+        or "GX430T Host"
+    )
+
+    defaults: dict[str, Any] = {
+        "schema": "gx430t.print_host_config.v1",
+        "hostName": host_name,
+        "port": PORT,
+        "protocol": PROTOCOL_VERSION,
+        "pairingEnabled": True,
+    }
+
+    for key, value in defaults.items():
+        if config.get(key) != value:
+            config[key] = value
+            changed = True
+
+    token = str(config.get("token", ""))
+
+    if len(token) != 64:
+        config["token"] = secrets.token_hex(32)
+        changed = True
+
+    pairing_code = str(config.get("pairingCode", ""))
+
+    if len(pairing_code) != 6 or not pairing_code.isdigit():
+        config["pairingCode"] = generate_pairing_code()
+        changed = True
+
+    if changed or not CONFIG.exists():
+        write_config(config)
+
+    return config
+
+
+def run_cli(
+    arguments: list[str],
+    timeout: int = 30,
+) -> tuple[int, str]:
+    try:
+        result = subprocess.run(
+            [CLI, *arguments],
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+
+        output = (result.stdout + result.stderr).strip()
+        return result.returncode, output
+    except Exception as exc:
+        return 1, str(exc)
+
+
+def append_job(record: dict[str, Any]) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    with LOG_FILE.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                record,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
+
+def read_jobs(limit: int = 100) -> list[dict[str, Any]]:
+    if not LOG_FILE.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+
+    try:
+        with LOG_FILE.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+
+                if not line:
+                    continue
+
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(payload, dict):
+                    records.append(payload)
+    except OSError:
+        return []
+
+    records.reverse()
+    return records[: max(1, min(limit, 500))]
+
+
+def job_summary(
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    print_jobs = [
+        record
+        for record in records
+        if "jobId" in record
+    ]
+
+    successful = sum(
+        1
+        for record in print_jobs
+        if record.get("success") is True
+    )
+
+    failed = sum(
+        1
+        for record in print_jobs
+        if record.get("success") is False
+    )
+
+    copies = sum(
+        int(record.get("copies", 0) or 0)
+        for record in print_jobs
+    )
+
+    return {
+        "totalJobs": len(print_jobs),
+        "successfulJobs": successful,
+        "failedJobs": failed,
+        "totalCopies": copies,
+        "latestJob": print_jobs[0] if print_jobs else None,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
-    def send_json(self, obj, status=200):
-        data = json_bytes(obj)
+    server_version = "GX430THost/1.0"
+
+    def log_message(
+        self,
+        format: str,
+        *args: Any,
+    ) -> None:
+        sys.stderr.write(
+            "GX430T "
+            + (format % args)
+            + "\n"
+        )
+
+    def send_json(
+        self,
+        status: int,
+        payload: dict[str, Any],
+    ) -> None:
+        body = json.dumps(
+            payload,
+            indent=2,
+            ensure_ascii=False,
+        ).encode("utf-8")
+
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header(
+            "Content-Type",
+            "application/json; charset=utf-8",
+        )
+        self.send_header(
+            "Content-Length",
+            str(len(body)),
+        )
+        self.send_header(
+            "Cache-Control",
+            "no-store",
+        )
         self.end_headers()
-        self.wfile.write(data)
+        self.wfile.write(body)
 
-    def do_GET(self):
-        path = urllib.parse.urlparse(self.path).path
-        if path == "/api/health":
-            self.send_json({"ok": True, "version": VERSION, "formats": ["csv", "tsv", "xlsx", "ods"], "headerless": True})
-            return
-        if path == "/api/state":
-            self.send_json(state())
-            return
-        body = f"""<!doctype html><html><head><meta charset="utf-8"><title>GX430T Upload Queue</title></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#eee;padding:32px">
-<h1>GX430T Upload Queue</h1>
-<p>Secondary browser surface. Native Mac app, Mac menu bar, and iPhone are primary surfaces.</p>
-<p>Supports CSV, TSV, XLSX, ODS, headerless one-column barcode sheets, quantity expansion, and ordered queue.</p>
-<form method="post" action="/api/upload" enctype="multipart/form-data">
-<input type="file" name="file" accept=".csv,.tsv,.xlsx,.ods,.txt"/>
-<button>Upload</button>
-</form>
-<p><button onclick="fetch('/api/print-next',{{method:'POST'}}).then(r=>r.text()).then(alert)">Print Next</button>
-<button onclick="fetch('/api/print-all',{{method:'POST'}}).then(r=>r.text()).then(alert)">Print All</button>
-<button onclick="fetch('/api/clear',{{method:'POST'}}).then(r=>r.text()).then(alert)">Clear</button></p>
-<pre id="s"></pre>
-<script>async function load(){{s.textContent=await fetch('/api/state').then(r=>r.text())}}; setInterval(load,2000); load();</script>
-</body></html>"""
+    def send_html(
+        self,
+        status: int,
+        body: str,
+    ) -> None:
         data = body.encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+
+        self.send_response(status)
+        self.send_header(
+            "Content-Type",
+            "text/html; charset=utf-8",
+        )
+        self.send_header(
+            "Content-Length",
+            str(len(data)),
+        )
+        self.send_header(
+            "Cache-Control",
+            "no-store",
+        )
         self.end_headers()
         self.wfile.write(data)
 
-    def do_POST(self):
-        path = urllib.parse.urlparse(self.path).path
-        if path == "/api/upload":
+    def authenticated(self) -> bool:
+        config = read_config()
+        expected = str(config.get("token", ""))
+        supplied = self.headers.get("Authorization", "")
+
+        if supplied.startswith("Bearer "):
+            supplied = supplied[7:]
+
+        return (
+            bool(expected)
+            and secrets.compare_digest(supplied, expected)
+        )
+
+    def require_authentication(self) -> bool:
+        if self.authenticated():
+            return True
+
+        self.send_json(
+            401,
+            {
+                "error": "unauthorized",
+                "protocol": PROTOCOL_VERSION,
+            },
+        )
+        return False
+
+    def read_body(
+        self,
+        maximum: int = MAX_JSON_BODY,
+    ) -> dict[str, Any]:
+        length = int(
+            self.headers.get("Content-Length", "0")
+        )
+
+        if length < 1 or length > maximum:
+            raise ValueError("invalid content length")
+
+        raw = self.rfile.read(length)
+        payload = json.loads(raw.decode("utf-8"))
+
+        if not isinstance(payload, dict):
+            raise ValueError("JSON object required")
+
+        return payload
+
+    def request_path(self) -> str:
+        return urllib.parse.urlparse(self.path).path
+
+    def do_GET(self) -> None:
+        path = self.request_path()
+
+        if path in {"/v1/health", "/api/health"}:
+            self.send_json(
+                200,
+                {
+                    "service": "GX430T Print Host",
+                    "protocol": PROTOCOL_VERSION,
+                    "status": "ok",
+                    "version": VERSION,
+                    "formats": [
+                        "csv",
+                        "tsv",
+                        "xlsx",
+                        "ods",
+                    ],
+                    "headerless": True,
+                },
+            )
+            return
+
+        if path == "/v1/info":
+            config = ensure_config()
+
+            self.send_json(
+                200,
+                {
+                    "service": "GX430T Print Host",
+                    "protocol": PROTOCOL_VERSION,
+                    "hostName": config.get(
+                        "hostName",
+                        "GX430T Host",
+                    ),
+                    "port": PORT,
+                    "authentication":
+                        "pairing-code-and-bearer-token",
+                    "pairingEnabled": bool(
+                        config.get(
+                            "pairingEnabled",
+                            False,
+                        )
+                    ),
+                    "queueFormats": [
+                        "csv",
+                        "tsv",
+                        "xlsx",
+                        "ods",
+                    ],
+                },
+            )
+            return
+
+        if path == "/v1/status":
+            code, output = run_cli(["status"])
+
+            self.send_json(
+                200 if code == 0 else 503,
+                {
+                    "service": "GX430T Print Host",
+                    "protocol": PROTOCOL_VERSION,
+                    "printerOnline": code == 0,
+                    "statusOutput": output,
+                },
+            )
+            return
+
+        if path.startswith("/v1/jobs"):
+            if not self.require_authentication():
+                return
+
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlparse(
+                    self.path
+                ).query
+            )
+
             try:
-                filename, data = parse_multipart_file(self.headers, self.rfile)
-                self.send_json(save_upload_bytes(filename, data))
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                self.send_json({"ok": False, "error": str(e), "type": e.__class__.__name__}, 500)
-            return
-        if path == "/api/print-next":
-            self.send_json(print_next())
-            return
-        if path == "/api/print-all":
-            self.send_json(print_all())
-            return
-        if path == "/api/clear":
-            self.send_json(clear())
-            return
-        self.send_json({"ok": False, "error": "not found"}, 404)
+                limit = int(
+                    query.get("limit", ["100"])[0]
+                )
+            except ValueError:
+                limit = 100
 
-    def log_message(self, fmt, *args):
-        sys.stderr.write("GX430T " + (fmt % args) + "\n")
+            records = read_jobs(limit)
 
-def main():
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd")
-    s = sub.add_parser("serve")
-    s.add_argument("--port", type=int, default=PORT)
-    s.add_argument("--open", action="store_true")
-    u = sub.add_parser("upload")
-    u.add_argument("file")
-    sub.add_parser("status")
-    sub.add_parser("print-next")
-    sub.add_parser("print-all")
-    sub.add_parser("clear")
-    args = ap.parse_args()
+            if path == "/v1/jobs/summary":
+                self.send_json(
+                    200,
+                    {
+                        "service":
+                            "GX430T Print Host",
+                        "protocol":
+                            PROTOCOL_VERSION,
+                        "summary":
+                            job_summary(records),
+                    },
+                )
+                return
+
+            self.send_json(
+                200,
+                {
+                    "service": "GX430T Print Host",
+                    "protocol": PROTOCOL_VERSION,
+                    "jobs": records,
+                },
+            )
+            return
+
+        if path == "/api/state":
+            if not self.require_authentication():
+                return
+
+            self.send_json(
+                200,
+                state(),
+            )
+            return
+
+        if path == "/":
+            self.send_html(
+                200,
+                """<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GX430T Print Host</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#eee;padding:32px">
+<h1>GX430T Print Host</h1>
+<p>The native Mac application, menu bar, and paired iPhone application are the product control surfaces.</p>
+<p>Secure print and queue transport is active on protocol 1.</p>
+<p>Queue formats: CSV, TSV, XLSX, and ODS.</p>
+</body>
+</html>""",
+            )
+            return
+
+        self.send_json(
+            404,
+            {"error": "not_found"},
+        )
+
+    def do_POST(self) -> None:
+        path = self.request_path()
+
+        if path == "/v1/pair":
+            try:
+                payload = self.read_body()
+
+                supplied_code = str(
+                    payload.get(
+                        "pairingCode",
+                        "",
+                    )
+                ).strip()
+
+                client_name = str(
+                    payload.get(
+                        "clientName",
+                        "GX430T Client",
+                    )
+                ).strip()[:120]
+
+                config = ensure_config()
+                expected_code = str(
+                    config.get(
+                        "pairingCode",
+                        "",
+                    )
+                )
+
+                pairing_enabled = bool(
+                    config.get(
+                        "pairingEnabled",
+                        False,
+                    )
+                )
+
+                if (
+                    not pairing_enabled
+                    or not expected_code
+                ):
+                    self.send_json(
+                        403,
+                        {"error": "pairing_disabled"},
+                    )
+                    return
+
+                if not secrets.compare_digest(
+                    supplied_code,
+                    expected_code,
+                ):
+                    time.sleep(0.35)
+
+                    self.send_json(
+                        401,
+                        {
+                            "error":
+                                "invalid_pairing_code"
+                        },
+                    )
+                    return
+
+                token = str(
+                    config.get("token", "")
+                )
+
+                if not token:
+                    self.send_json(
+                        503,
+                        {
+                            "error":
+                                "host_token_unavailable"
+                        },
+                    )
+                    return
+
+                config["pairingCode"] = (
+                    generate_pairing_code()
+                )
+                config["pairingEnabled"] = True
+                config["lastPairedClient"] = (
+                    client_name
+                )
+                config["lastPairedAddress"] = (
+                    self.client_address[0]
+                )
+                config["lastPairedTimestamp"] = int(
+                    time.time()
+                )
+
+                write_config(config)
+
+                append_job(
+                    {
+                        "event":
+                            "client_paired",
+                        "clientName":
+                            client_name,
+                        "remoteAddress":
+                            self.client_address[0],
+                        "timestamp":
+                            int(time.time()),
+                    }
+                )
+
+                self.send_json(
+                    200,
+                    {
+                        "paired": True,
+                        "protocol":
+                            PROTOCOL_VERSION,
+                        "hostName":
+                            config.get(
+                                "hostName",
+                                "GX430T Host",
+                            ),
+                        "token": token,
+                    },
+                )
+                return
+            except (
+                ValueError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as exc:
+                self.send_json(
+                    400,
+                    {
+                        "error":
+                            "invalid_request",
+                        "detail":
+                            str(exc),
+                    },
+                )
+                return
+            except Exception as exc:
+                self.send_json(
+                    500,
+                    {
+                        "error":
+                            "internal_error",
+                        "detail":
+                            str(exc),
+                    },
+                )
+                return
+
+        if path == "/v1/print":
+            if not self.require_authentication():
+                return
+
+            try:
+                payload = self.read_body()
+
+                kind = str(
+                    payload.get("kind", "")
+                ).lower()
+
+                value = str(
+                    payload.get("value", "")
+                ).strip()
+
+                copies = int(
+                    payload.get("copies", 1)
+                )
+
+                allowed_kinds = {
+                    "text": "print-text",
+                    "code128":
+                        "print-code128",
+                    "code39":
+                        "print-code39",
+                    "qr": "print-qr",
+                }
+
+                if kind not in allowed_kinds:
+                    raise ValueError(
+                        "unsupported print kind"
+                    )
+
+                if not value:
+                    raise ValueError(
+                        "value is required"
+                    )
+
+                if len(value) > 4096:
+                    raise ValueError(
+                        "value is too long"
+                    )
+
+                if copies < 1 or copies > 999:
+                    raise ValueError(
+                        "copies must be between 1 and 999"
+                    )
+
+                job_id = str(uuid.uuid4())
+                started = time.time()
+
+                payload_hash = hashlib.sha256(
+                    (
+                        f"{kind}\0"
+                        f"{value}\0"
+                        f"{copies}"
+                    ).encode("utf-8")
+                ).hexdigest()
+
+                code, output = run_cli(
+                    [
+                        allowed_kinds[kind],
+                        value,
+                        str(copies),
+                    ],
+                    timeout=60,
+                )
+
+                record = {
+                    "jobId": job_id,
+                    "kind": kind,
+                    "copies": copies,
+                    "payloadHash":
+                        payload_hash,
+                    "accepted": code == 0,
+                    "success": code == 0,
+                    "deliveryState": (
+                        "SUBMITTED_TO_CUPS"
+                        if code == 0
+                        else "SUBMISSION_FAILED"
+                    ),
+                    "physicalDeliveryVerified":
+                        False,
+                    "result": output,
+                    "durationMs": int(
+                        (
+                            time.time()
+                            - started
+                        )
+                        * 1000
+                    ),
+                    "timestamp":
+                        int(time.time()),
+                    "remoteAddress":
+                        self.client_address[0],
+                }
+
+                append_job(record)
+
+                self.send_json(
+                    200 if code == 0 else 503,
+                    {
+                        "jobId": job_id,
+                        "accepted": code == 0,
+                        "result": output,
+                    },
+                )
+                return
+            except (
+                ValueError,
+                TypeError,
+                json.JSONDecodeError,
+            ) as exc:
+                self.send_json(
+                    400,
+                    {
+                        "error":
+                            "invalid_request",
+                        "detail":
+                            str(exc),
+                    },
+                )
+                return
+            except Exception as exc:
+                self.send_json(
+                    500,
+                    {
+                        "error":
+                            "internal_error",
+                        "detail":
+                            str(exc),
+                    },
+                )
+                return
+
+        if path.startswith("/api/"):
+            if not self.require_authentication():
+                return
+
+            if path == "/api/upload":
+                try:
+                    length = int(
+                        self.headers.get(
+                            "Content-Length",
+                            "0",
+                        )
+                    )
+
+                    if (
+                        length < 1
+                        or length > MAX_UPLOAD_BODY
+                    ):
+                        raise ValueError(
+                            "invalid upload length"
+                        )
+
+                    filename, data = (
+                        parse_multipart_file(
+                            self.headers,
+                            self.rfile,
+                        )
+                    )
+
+                    self.send_json(
+                        200,
+                        save_upload_bytes(
+                            filename,
+                            data,
+                        ),
+                    )
+                except Exception as exc:
+                    self.send_json(
+                        400,
+                        {
+                            "ok": False,
+                            "error": str(exc),
+                            "type":
+                                exc.__class__.__name__,
+                        },
+                    )
+                return
+
+            if path == "/api/print-next":
+                self.send_json(
+                    200,
+                    print_next(),
+                )
+                return
+
+            if path == "/api/print-all":
+                self.send_json(
+                    200,
+                    print_all(),
+                )
+                return
+
+            if path == "/api/clear":
+                self.send_json(
+                    200,
+                    clear(),
+                )
+                return
+
+        self.send_json(
+            404,
+            {"error": "not_found"},
+        )
+
+
+def main() -> int:
+    global HOST
+    global PORT
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(
+        dest="cmd"
+    )
+
+    serve_parser = subparsers.add_parser(
+        "serve"
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=PORT,
+    )
+    serve_parser.add_argument(
+        "--bind",
+        default=HOST,
+    )
+    serve_parser.add_argument(
+        "--open",
+        action="store_true",
+    )
+
+    subparsers.add_parser("init-config")
+
+    upload_parser = subparsers.add_parser(
+        "upload"
+    )
+    upload_parser.add_argument("file")
+
+    subparsers.add_parser("status")
+    subparsers.add_parser("print-next")
+    subparsers.add_parser("print-all")
+    subparsers.add_parser("clear")
+
+    args = parser.parse_args()
 
     if args.cmd == "serve":
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+        HOST = args.bind
+        PORT = args.port
+
+        config = ensure_config()
+
+        if not Path(CLI).is_file():
+            print(
+                "GX430T_HOST_CLI_NOT_FOUND=true",
+                file=sys.stderr,
+            )
+            return 70
+
+        if not config.get("token"):
+            print(
+                "GX430T_HOST_TOKEN_NOT_CONFIGURED=true",
+                file=sys.stderr,
+            )
+            return 78
+
+        server = ThreadingHTTPServer(
+            (HOST, PORT),
+            Handler,
+        )
+
         if args.open:
-            webbrowser.open(f"http://127.0.0.1:{args.port}")
-        print(json.dumps({"ok": True, "version": VERSION, "url": f"http://127.0.0.1:{args.port}"}), flush=True)
+            webbrowser.open(
+                f"http://127.0.0.1:{PORT}"
+            )
+
+        print(
+            json.dumps(
+                {
+                    "service":
+                        "GX430T Print Host",
+                    "protocol":
+                        PROTOCOL_VERSION,
+                    "version":
+                        VERSION,
+                    "url":
+                        f"http://127.0.0.1:{PORT}",
+                    "securePrint":
+                        True,
+                    "secureQueue":
+                        True,
+                }
+            ),
+            flush=True,
+        )
+
         server.serve_forever()
-    elif args.cmd == "upload":
-        print(json.dumps(enqueue_file(args.file), indent=2))
-    elif args.cmd == "status":
-        print(json.dumps(state(), indent=2))
-    elif args.cmd == "print-next":
-        print(json.dumps(print_next(), indent=2))
-    elif args.cmd == "print-all":
-        print(json.dumps(print_all(), indent=2))
-    elif args.cmd == "clear":
-        print(json.dumps(clear(), indent=2))
-    else:
-        ap.print_help()
+        return 0
+
+    if args.cmd == "init-config":
+        config = ensure_config()
+
+        print(
+            json.dumps(
+                {
+                    "hostName":
+                        config.get(
+                            "hostName",
+                            "GX430T Host",
+                        ),
+                    "port":
+                        config.get(
+                            "port",
+                            PORT,
+                        ),
+                    "protocol":
+                        config.get(
+                            "protocol",
+                            PROTOCOL_VERSION,
+                        ),
+                    "pairingCode":
+                        config.get(
+                            "pairingCode",
+                            "",
+                        ),
+                    "pairingEnabled":
+                        bool(
+                            config.get(
+                                "pairingEnabled",
+                                False,
+                            )
+                        ),
+                    "tokenConfigured":
+                        len(
+                            str(
+                                config.get(
+                                    "token",
+                                    "",
+                                )
+                            )
+                        )
+                        == 64,
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.cmd == "upload":
+        print(
+            json.dumps(
+                enqueue_file(args.file),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    if args.cmd == "status":
+        print(
+            json.dumps(
+                state(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    if args.cmd == "print-next":
+        print(
+            json.dumps(
+                print_next(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    if args.cmd == "print-all":
+        print(
+            json.dumps(
+                print_all(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    if args.cmd == "clear":
+        print(
+            json.dumps(
+                clear(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    parser.print_help()
+    return 64
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
