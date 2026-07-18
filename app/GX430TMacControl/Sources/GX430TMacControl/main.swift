@@ -1,513 +1,1185 @@
-import Cocoa
+import SwiftUI
+import AppKit
 import Foundation
 
-final class GX430TAppDelegate: NSObject, NSApplicationDelegate, NSTextViewDelegate {
-    var window: NSWindow!
-    var statusItem: NSStatusItem!
-
-    var mainRoot: NSView!
-    var quickView: NSView!
-    var queueView: NSView!
-
-    var contentText: NSTextView!
-    var statusLabel: NSTextField!
-    var charCount: NSTextField!
-    var previewTitle: NSTextField!
-    var previewCode: NSTextField!
-    var modeControl: NSSegmentedControl!
-    var copiesField: NSTextField!
-    var queueLog: NSTextView!
-    var queueStatus: NSTextField!
-    var uploadButton: NSButton!
-    var mode: String = "Code 128"
-
-    let port = "9430"
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        buildWindow()
-        installStatusBarMenu()
-        refreshPrinter()
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
-    }
-
-    func buildWindow() {
-        let frame = NSRect(x: 0, y: 0, width: 1180, height: 760)
-        window = NSWindow(
-            contentRect: frame,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.center()
-        window.title = "GX430T Mac Control v0.3.3"
-        window.minSize = NSSize(width: 980, height: 640)
-
-        let root = NSView(frame: frame)
-        root.wantsLayer = true
-        root.layer?.backgroundColor = NSColor(calibratedWhite: 0.075, alpha: 1).cgColor
-
-        let sidebar = panel(NSRect(x: 0, y: 0, width: 285, height: 760), radius: 0)
-        sidebar.autoresizingMask = [.height, .maxXMargin]
-        sidebar.layer?.backgroundColor = NSColor(calibratedWhite: 0.105, alpha: 1).cgColor
-
-        let icon = text("🦓", 44, .white, .bold)
-        icon.frame = NSRect(x: 34, y: 606, width: 62, height: 62)
-        sidebar.addSubview(icon)
-
-        let title = text("GX430T", 30, .white, .bold)
-        title.frame = NSRect(x: 95, y: 624, width: 160, height: 42)
-        sidebar.addSubview(title)
-
-        statusLabel = text("🖨  GX430T Offline", 16, .lightGray, .semibold)
-        statusLabel.frame = NSRect(x: 34, y: 578, width: 225, height: 28)
-        sidebar.addSubview(statusLabel)
-
-        let rule = NSBox(frame: NSRect(x: 32, y: 552, width: 220, height: 1))
-        rule.boxType = .separator
-        sidebar.addSubview(rule)
-
-        let quick = btn("⚡  Quick Print", #selector(showQuickPrint))
-        quick.frame = NSRect(x: 30, y: 498, width: 220, height: 36)
-        sidebar.addSubview(quick)
-
-        let batch = btn("⇪  Upload Queue", #selector(showUploadQueue))
-        batch.frame = NSRect(x: 30, y: 454, width: 220, height: 36)
-        sidebar.addSubview(batch)
-
-        sidebarItem(sidebar, y: 410, icon: "↺", label: "History")
-        sidebarItem(sidebar, y: 368, icon: "⚠", label: "Connection")
-
-        let refresh = btn("↻  Refresh Printer", #selector(refreshPrinterAction))
-        refresh.frame = NSRect(x: 30, y: 74, width: 220, height: 34)
-        sidebar.addSubview(refresh)
-
-        let sideFoot = text("Native GX430T control\nLicence · GitHub", 11, .gray, .regular)
-        sideFoot.frame = NSRect(x: 32, y: 24, width: 220, height: 36)
-        sideFoot.maximumNumberOfLines = 2
-        sidebar.addSubview(sideFoot)
-
-        mainRoot = NSView(frame: NSRect(x: 285, y: 0, width: 895, height: 760))
-        mainRoot.autoresizingMask = [.width, .height]
-        mainRoot.wantsLayer = true
-        mainRoot.layer?.backgroundColor = NSColor(calibratedWhite: 0.075, alpha: 1).cgColor
-
-        quickView = buildQuickPrintView()
-        queueView = buildUploadQueueView()
-        queueView.isHidden = true
-
-        mainRoot.addSubview(quickView)
-        mainRoot.addSubview(queueView)
-
-        root.addSubview(sidebar)
-        root.addSubview(mainRoot)
-        window.contentView = root
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        updatePreview()
-    }
-
-    func buildQuickPrintView() -> NSView {
-        let main = NSView(frame: NSRect(x: 0, y: 0, width: 895, height: 760))
-        main.autoresizingMask = [.width, .height]
-
-        let mainTitle = text("GX430T", 18, .white, .bold)
-        mainTitle.frame = NSRect(x: 26, y: 704, width: 240, height: 30)
-        main.addSubview(mainTitle)
-
-        let h = text("Quick Print", 38, .white, .bold)
-        h.frame = NSRect(x: 38, y: 638, width: 440, height: 50)
-        main.addSubview(h)
-
-        let sub = text("Type, preview and print.", 16, .lightGray, .semibold)
-        sub.frame = NSRect(x: 40, y: 612, width: 420, height: 28)
-        main.addSubview(sub)
-
-        let format = text("FORMAT", 13, .gray, .bold)
-        format.frame = NSRect(x: 40, y: 566, width: 180, height: 24)
-        main.addSubview(format)
-
-        modeControl = NSSegmentedControl(labels: ["Aa  Text", "▥  Code 128", "▥  Code 39", "⌗  QR"], trackingMode: .selectOne, target: self, action: #selector(modeChanged))
-        modeControl.frame = NSRect(x: 38, y: 524, width: 812, height: 46)
-        modeControl.selectedSegment = 1
-        main.addSubview(modeControl)
-
-        let inputCard = panel(NSRect(x: 38, y: 338, width: 812, height: 164), radius: 18)
-        main.addSubview(inputCard)
-
-        let labelContent = text("↗  Label content", 14, .lightGray, .semibold)
-        labelContent.frame = NSRect(x: 58, y: 470, width: 260, height: 24)
-        main.addSubview(labelContent)
-
-        charCount = text("0 characters", 12, .gray, .regular)
-        charCount.alignment = .right
-        charCount.frame = NSRect(x: 650, y: 470, width: 180, height: 24)
-        main.addSubview(charCount)
-
-        contentText = NSTextView(frame: NSRect(x: 58, y: 358, width: 772, height: 92))
-        contentText.font = NSFont.systemFont(ofSize: 22, weight: .medium)
-        contentText.textColor = .white
-        contentText.backgroundColor = .clear
-        contentText.insertionPointColor = .systemBlue
-        contentText.delegate = self
-        main.addSubview(contentText)
-
-        let previewCard = NSView(frame: NSRect(x: 38, y: 92, width: 812, height: 210))
-        previewCard.wantsLayer = true
-        previewCard.layer?.backgroundColor = NSColor.white.cgColor
-        previewCard.layer?.cornerRadius = 20
-        main.addSubview(previewCard)
-
-        previewCode = text("||||||||||||||||||||||||||||||||||||||||", 48, .black, .regular)
-        previewCode.font = NSFont.monospacedSystemFont(ofSize: 46, weight: .regular)
-        previewCode.alignment = .center
-        previewCode.frame = NSRect(x: 118, y: 184, width: 652, height: 62)
-        main.addSubview(previewCode)
-
-        previewTitle = text("Your label preview", 24, .black, .bold)
-        previewTitle.alignment = .center
-        previewTitle.frame = NSRect(x: 118, y: 148, width: 652, height: 34)
-        main.addSubview(previewTitle)
-
-        let copies = text("Copies:", 15, .white, .semibold)
-        copies.alignment = .right
-        copies.frame = NSRect(x: 92, y: 38, width: 115, height: 28)
-        main.addSubview(copies)
-
-        copiesField = NSTextField(string: "1")
-        copiesField.frame = NSRect(x: 214, y: 36, width: 50, height: 30)
-        copiesField.alignment = .center
-        main.addSubview(copiesField)
-
-        let test = btn("Test Label", #selector(testLabel))
-        test.frame = NSRect(x: 602, y: 34, width: 110, height: 34)
-        main.addSubview(test)
-
-        let print = btn("🖨  Print", #selector(printLabel))
-        print.frame = NSRect(x: 730, y: 34, width: 120, height: 34)
-        main.addSubview(print)
-
-        return main
-    }
-
-    func buildUploadQueueView() -> NSView {
-        let main = NSView(frame: NSRect(x: 0, y: 0, width: 895, height: 760))
-        main.autoresizingMask = [.width, .height]
-
-        let mainTitle = text("GX430T", 18, .white, .bold)
-        mainTitle.frame = NSRect(x: 26, y: 704, width: 240, height: 30)
-        main.addSubview(mainTitle)
-
-        let h = text("Upload Queue", 38, .white, .bold)
-        h.frame = NSRect(x: 38, y: 638, width: 520, height: 50)
-        main.addSubview(h)
-
-        let sub = text("Excel / CSV batch printing in ordered queue.", 16, .lightGray, .semibold)
-        sub.frame = NSRect(x: 40, y: 612, width: 520, height: 28)
-        main.addSubview(sub)
-
-        let topCard = panel(NSRect(x: 38, y: 508, width: 812, height: 84), radius: 18)
-        main.addSubview(topCard)
-
-        uploadButton = btn("Choose Sheet File", #selector(uploadSpreadsheet))
-        uploadButton.frame = NSRect(x: 58, y: 532, width: 178, height: 36)
-        main.addSubview(uploadButton)
-
-        let openQueue = btn("Open Queue", #selector(openQueueBrowser))
-        openQueue.frame = NSRect(x: 252, y: 532, width: 130, height: 36)
-        main.addSubview(openQueue)
-
-        let refresh = btn("Refresh Queue", #selector(refreshQueueStatus))
-        refresh.frame = NSRect(x: 398, y: 532, width: 140, height: 36)
-        main.addSubview(refresh)
-
-        let printNext = btn("Print Next", #selector(queuePrintNext))
-        printNext.frame = NSRect(x: 554, y: 532, width: 120, height: 36)
-        main.addSubview(printNext)
-
-        let printAll = btn("Print All", #selector(queuePrintAll))
-        printAll.frame = NSRect(x: 690, y: 532, width: 120, height: 36)
-        main.addSubview(printAll)
-
-        queueStatus = text("Queue ready. Upload .xlsx or .csv.", 15, .lightGray, .semibold)
-        queueStatus.frame = NSRect(x: 46, y: 474, width: 804, height: 26)
-        main.addSubview(queueStatus)
-
-        let logCard = panel(NSRect(x: 38, y: 74, width: 812, height: 388), radius: 18)
-        main.addSubview(logCard)
-
-        queueLog = NSTextView(frame: NSRect(x: 58, y: 94, width: 772, height: 348))
-        queueLog.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        queueLog.textColor = .white
-        queueLog.backgroundColor = .clear
-        queueLog.isEditable = false
-        queueLog.string = "Native Upload Queue\n\nAccepted columns:\nbarcode, sku, style code, item code, codice, EAN, quantity, qty, qta, description, brand, order, ordine, sequence\n\nRows print in file order. Quantity expands one row into multiple labels."
-        main.addSubview(queueLog)
-
-        return main
-    }
-
-    func panel(_ frame: NSRect, radius: CGFloat) -> NSView {
-        let v = NSView(frame: frame)
-        v.wantsLayer = true
-        v.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1).cgColor
-        v.layer?.borderColor = NSColor(calibratedWhite: 0.20, alpha: 1).cgColor
-        v.layer?.borderWidth = 1
-        v.layer?.cornerRadius = radius
-        return v
-    }
-
-    func text(_ string: String, _ size: CGFloat, _ color: NSColor, _ weight: NSFont.Weight) -> NSTextField {
-        let f = NSTextField(labelWithString: string)
-        f.font = NSFont.systemFont(ofSize: size, weight: weight)
-        f.textColor = color
-        f.backgroundColor = .clear
-        f.isBezeled = false
-        f.isEditable = false
-        return f
-    }
-
-    func btn(_ title: String, _ action: Selector) -> NSButton {
-        let b = NSButton(title: title, target: self, action: action)
-        b.bezelStyle = .rounded
-        b.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
-        return b
-    }
-
-    func sidebarItem(_ parent: NSView, y: CGFloat, icon: String, label: String) {
-        let item = text("\(icon)  \(label)", 15, .lightGray, .semibold)
-        item.frame = NSRect(x: 34, y: y, width: 210, height: 28)
-        parent.addSubview(item)
-    }
-
-
-    func installStatusBarMenu() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.title = "GX430T"
-            button.image = NSImage(systemSymbolName: "printer", accessibilityDescription: "GX430T")
-        }
-
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open GX430T", action: #selector(openMainWindow), keyEquivalent: "o"))
-        menu.addItem(NSMenuItem(title: "Upload Queue", action: #selector(showUploadQueueFromMenu), keyEquivalent: "u"))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Print Next Queue Label", action: #selector(queuePrintNext), keyEquivalent: "n"))
-        menu.addItem(NSMenuItem(title: "Print All Queued Labels", action: #selector(queuePrintAll), keyEquivalent: "a"))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Open Queue Browser", action: #selector(openQueueBrowser), keyEquivalent: "b"))
-        menu.addItem(NSMenuItem(title: "Refresh Printer", action: #selector(refreshPrinterAction), keyEquivalent: "r"))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
-        statusItem.menu = menu
-    }
-
-    @objc func openMainWindow() {
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @objc func showUploadQueueFromMenu() {
-        openMainWindow()
-        showUploadQueue()
-    }
-
-    @objc func quitApp() {
-        NSApp.terminate(nil)
-    }
-
-    @objc func showQuickPrint() {
-        quickView.isHidden = false
-        queueView.isHidden = true
-    }
-
-    @objc func showUploadQueue() {
-        quickView.isHidden = true
-        queueView.isHidden = false
-        startQueueHost()
-        refreshQueueStatus()
-    }
-
-    @objc func modeChanged() {
-        let labels = ["Text", "Code 128", "Code 39", "QR"]
-        mode = labels[max(0, modeControl.selectedSegment)]
-        updatePreview()
-    }
-
-    func textDidChange(_ notification: Notification) {
-        updatePreview()
-    }
-
-    func updatePreview() {
-        let value = contentText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        charCount.stringValue = "\(value.count) characters"
-        if value.isEmpty {
-            previewTitle.stringValue = "Your label preview"
-            previewCode.stringValue = "||||||||||||||||||||||||||||||||||||||||"
-            return
-        }
-        previewTitle.stringValue = value
-        if mode == "QR" {
-            previewCode.stringValue = "▦ ▦ ▦ ▦ ▦"
-        } else if mode == "Text" {
-            previewCode.stringValue = value
-        } else {
-            previewCode.stringValue = "||||||||||||||||||||||||||||||||||||||||"
-        }
-    }
-
-    @objc func refreshPrinterAction() {
-        refreshPrinter()
-    }
-
-    func refreshPrinter() {
-        let result = run("/usr/bin/lpstat", ["-p"])
-        if result.uppercased().contains("GX430") || result.uppercased().contains("ZEBRA") {
-            statusLabel.stringValue = "🖨  GX430T Ready"
-            statusLabel.textColor = .systemGreen
-        } else {
-            statusLabel.stringValue = "🖨  GX430T Offline"
-            statusLabel.textColor = .lightGray
-        }
-    }
-
-    func labelZPL() -> String {
-        let raw = contentText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = raw.isEmpty ? "TEST" : raw
-        let safe = value.replacingOccurrences(of: "^", with: " ").replacingOccurrences(of: "~", with: " ")
-        if mode == "QR" {
-            return "^XA\n^CI28\n^FO170,35^BQN,2,8^FDQA,\(safe)^FS\n^FO40,170^A0N,24,24^FD\(safe)^FS\n^XZ\n"
-        }
-        if mode == "Text" {
-            return "^XA\n^CI28\n^FO35,70^A0N,42,42^FD\(safe)^FS\n^XZ\n"
-        }
-        if mode == "Code 39" {
-            return "^XA\n^CI28\n^FO35,45^BY2,3,90^B3N,N,90,Y,N^FD\(safe)^FS\n^XZ\n"
-        }
-        return "^XA\n^CI28\n^FO35,45^BY2,2.7,90^BCN,90,Y,N,N^FD\(safe)^FS\n^XZ\n"
-    }
-
-    @objc func testLabel() {
-        contentText.string = "GX430T TEST"
-        updatePreview()
-    }
-
-    @objc func printLabel() {
-        let temp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gx430t-label.zpl")
-        try? labelZPL().write(to: temp, atomically: true, encoding: .utf8)
-
-        let copies = max(1, Int(copiesField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 1)
-        for _ in 0..<copies {
-            _ = run("/usr/bin/lp", ["-o", "raw", temp.path])
-        }
-    }
-
-    @objc func uploadSpreadsheet() {
-        startQueueHost()
-
-        let panel = NSOpenPanel()
-        panel.title = "Choose Excel or CSV"
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedFileTypes = ["csv", "txt", "tsv", "xlsx", "ods"]
-
-        if panel.runModal() == .OK, let url = panel.url {
-            queueStatus.stringValue = "Uploading \(url.lastPathComponent)…"
-            let output = runGX(["upload", url.path])
-            queueLog.string = "UPLOAD RESULT\n\n\(output)\n\n" + queueLog.string
-            refreshQueueStatus()
-        }
-    }
-
-    @objc func refreshQueueStatus() {
-        startQueueHost()
-        let output = runGX(["status"])
-        queueLog.string = "QUEUE STATUS\n\n\(output)"
-        if output.contains("\"queued\"") {
-            queueStatus.stringValue = "Queue refreshed."
-            queueStatus.textColor = .systemGreen
-        } else {
-            queueStatus.stringValue = "Queue status unavailable. Check local host."
-            queueStatus.textColor = .systemOrange
-        }
-    }
-
-    @objc func queuePrintNext() {
-        startQueueHost()
-        let output = runGX(["print-next"])
-        queueLog.string = "PRINT NEXT\n\n\(output)\n\n" + queueLog.string
-        refreshQueueStatus()
-    }
-
-    @objc func queuePrintAll() {
-        startQueueHost()
-        let output = runGX(["print-all"])
-        queueLog.string = "PRINT ALL\n\n\(output)\n\n" + queueLog.string
-        refreshQueueStatus()
-    }
-
-    @objc func openQueueBrowser() {
-        startQueueHost()
-        if let url = URL(string: "http://127.0.0.1:\(port)") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    func startQueueHost() {
-        _ = runGX(["start-bg"])
-    }
-
-    func gxRoot() -> String {
-        let bundle = Bundle.main.bundleURL.path
-        let repoRoot = URL(fileURLWithPath: bundle)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-        return repoRoot
-    }
-
-    func gxctlPath() -> String {
-        let candidates = [
-            "/usr/local/gx430t/bin/gx430tctl",
-            "\(gxRoot())/bin/gx430tctl"
-        ]
-        for c in candidates {
-            if FileManager.default.isExecutableFile(atPath: c) {
-                return c
+enum GX430TBrand {
+    static let repositoryURL = URL(string: "https://github.com/midiakiasat/GX430T")!
+    static let productName = "GX430T"
+    static let productSubtitle = "Professional label control"
+}
+
+struct GX430TLicenseFooter: View {
+    var compact = false
+
+    var body: some View {
+        Link(destination: GX430TBrand.repositoryURL) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.seal")
+                Text("Licence")
+                Text("·")
+                Text("GitHub")
             }
+            .font(compact ? .caption2 : .caption)
+            .foregroundStyle(.tertiary)
+            .contentShape(Rectangle())
         }
-        return "\(gxRoot())/bin/gx430tctl"
+        .buttonStyle(.plain)
+        .help("Open GX430T licence and source repository")
     }
+}
 
-    func runGX(_ args: [String]) -> String {
-        return run(gxctlPath(), args)
-    }
+enum GX430TConnectionMode: String {
+    case local = "USB Host"
+    case remote = "Network Client"
+    case unavailable = "Unavailable"
 
-    func run(_ launchPath: String, _ args: [String]) -> String {
-        let task = Process()
-        task.launchPath = launchPath
-        task.arguments = args
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8) ?? ""
-        } catch {
-            return "ERROR: \(error.localizedDescription)\nPATH: \(launchPath)\nARGS: \(args.joined(separator: " "))"
+    var symbol: String {
+        switch self {
+        case .local: return "cable.connector"
+        case .remote: return "network"
+        case .unavailable: return "exclamationmark.triangle"
         }
     }
 }
 
-let app = NSApplication.shared
-let delegate = GX430TAppDelegate()
-app.delegate = delegate
-app.setActivationPolicy(.regular)
-app.run()
+enum PrintKind: String, CaseIterable, Identifiable, Codable {
+    case text = "Text"
+    case code128 = "Code 128"
+    case code39 = "Code 39"
+    case qr = "QR"
+
+    var id: String { rawValue }
+
+    var command: String {
+        switch self {
+        case .text: return "print-text"
+        case .code128: return "print-code128"
+        case .code39: return "print-code39"
+        case .qr: return "print-qr"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .text: return "textformat"
+        case .code128, .code39: return "barcode"
+        case .qr: return "qrcode"
+        }
+    }
+}
+
+struct PrintHistoryItem: Codable, Identifiable {
+    let id: UUID
+    let value: String
+    let kind: PrintKind
+    let copies: Int
+    let date: Date
+    let succeeded: Bool
+}
+
+@MainActor
+final class GX430TModel: ObservableObject {
+    @Published var value = ""
+    @Published var kind: PrintKind = .code128
+    @Published var copies = 1
+    @Published var printerStatus = "Checking printer…"
+    @Published var printerOnline = false
+    @Published var isPrinting = false
+    @Published var message = "Ready"
+    @Published var history: [PrintHistoryItem] = []
+    @Published var connectionMode: GX430TConnectionMode = .unavailable
+    @Published var hostURL = ""
+    @Published var pairingCode = ""
+    @Published var clientName = Host.current().localizedName ?? "GX430T Mac"
+    @Published var isPairing = false
+
+    private let historyKey = "GX430TPrintHistory"
+    private let cli = "/usr/local/bin/gx430tctl"
+
+    init() {
+        loadHistory()
+        refreshStatus()
+    }
+
+    var canPrint: Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        copies > 0 &&
+        !isPrinting
+    }
+
+    func refreshStatus() {
+        execute(arguments: ["status"]) { [weak self] code, output in
+            guard let self else { return }
+
+            let localOnline = output.contains("GX430T_STATUS=ONLINE")
+            let localPrinting = output.contains("GX430T_STATUS=PRINTING")
+
+            if code == 0 && (localOnline || localPrinting) {
+                self.connectionMode = .local
+                self.printerOnline = true
+                self.printerStatus = localPrinting ? "GX430t Printing" : "GX430t Online"
+                self.message = "Connected directly through this Mac."
+                return
+            }
+
+            self.execute(arguments: ["client-status"]) { [weak self] remoteCode, remoteOutput in
+                guard let self else { return }
+
+                let remoteOnline = remoteOutput.contains("GX430T_REMOTE_STATUS=ONLINE")
+
+                if remoteCode == 0 && remoteOnline {
+                    self.connectionMode = .remote
+                    self.printerOnline = true
+                    self.printerStatus = "GX430t Online via Host"
+                    self.message = "Connected securely to the GX430T Print Host."
+                } else {
+                    self.connectionMode = .unavailable
+                    self.printerOnline = false
+
+                    if output.contains("GX430T_STATUS=OFFLINE") {
+                        self.printerStatus = "GX430t Offline"
+                    } else if output.contains("GX430T_STATUS=NOT_CONFIGURED") {
+                        self.printerStatus = "GX430t Not Configured"
+                    } else {
+                        self.printerStatus = "GX430t Unavailable"
+                    }
+
+                    self.message = "Connect this Mac to the printer by USB or pair it with a GX430T Print Host."
+                }
+            }
+        }
+    }
+
+    func printCurrent() {
+        let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanValue.isEmpty else {
+            message = "Enter something to print."
+            NSSound.beep()
+            return
+        }
+
+        guard copies >= 1 && copies <= 999 else {
+            message = "Copies must be between 1 and 999."
+            NSSound.beep()
+            return
+        }
+
+        isPrinting = true
+        message = "Sending \(copies) \(copies == 1 ? "label" : "labels")…"
+
+        let arguments: [String]
+
+        switch connectionMode {
+        case .local:
+            arguments = [kind.command, cleanValue, String(copies)]
+        case .remote:
+            let remoteKind: String
+            switch kind {
+            case .text: remoteKind = "text"
+            case .code128: remoteKind = "code128"
+            case .code39: remoteKind = "code39"
+            case .qr: remoteKind = "qr"
+            }
+            arguments = ["client-print", remoteKind, cleanValue, String(copies)]
+        case .unavailable:
+            isPrinting = false
+            message = "GX430t is unavailable. Connect USB or pair with the print host."
+            NSSound.beep()
+            return
+        }
+
+        execute(arguments: arguments) { [weak self] code, output in
+            guard let self else { return }
+
+            self.isPrinting = false
+            let succeeded = code == 0
+
+            self.history.insert(
+                PrintHistoryItem(
+                    id: UUID(),
+                    value: cleanValue,
+                    kind: self.kind,
+                    copies: self.copies,
+                    date: Date(),
+                    succeeded: succeeded
+                ),
+                at: 0
+            )
+
+            self.history = Array(self.history.prefix(100))
+            self.saveHistory()
+
+            if succeeded {
+                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "Print sent successfully."
+                    : output.trimmingCharacters(in: .whitespacesAndNewlines)
+                NSSound(named: "Glass")?.play()
+            } else {
+                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "Print failed."
+                    : output.trimmingCharacters(in: .whitespacesAndNewlines)
+                NSSound.beep()
+            }
+
+            self.refreshStatus()
+        }
+    }
+
+    func pairWithHost(completion: @escaping (Bool) -> Void) {
+        let cleanHost = hostURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanCode = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = clientName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanHost.isEmpty else {
+            message = "Enter the print-host address."
+            completion(false)
+            return
+        }
+
+        guard cleanCode.count == 6, cleanCode.allSatisfy({ $0.isNumber }) else {
+            message = "Enter the six-digit pairing code."
+            completion(false)
+            return
+        }
+
+        isPairing = true
+        message = "Pairing with GX430T Print Host…"
+
+        execute(arguments: ["client-pair", cleanHost, cleanCode, cleanName]) { [weak self] code, output in
+            guard let self else { return }
+
+            self.isPairing = false
+
+            if code == 0 && output.contains("GX430T_CLIENT_PAIRED=true") {
+                self.connectionMode = .remote
+                self.pairingCode = ""
+                self.message = "Mac paired successfully."
+                self.refreshStatus()
+                completion(true)
+            } else {
+                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                NSSound.beep()
+                completion(false)
+            }
+        }
+    }
+
+    func enableAppAutostart() {
+        execute(arguments: ["app-autostart-on"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code != 0 {
+                NSSound.beep()
+            }
+        }
+    }
+
+    func disableAppAutostart() {
+        execute(arguments: ["app-autostart-off"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code != 0 {
+                NSSound.beep()
+            }
+        }
+    }
+
+    func restartPrintHost() {
+        execute(arguments: ["host-restart"]) { [weak self] code, output in
+            guard let self else { return }
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if code == 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    self.refreshStatus()
+                }
+            } else {
+                NSSound.beep()
+            }
+        }
+    }
+
+    func removeClientPairing() {
+        execute(arguments: ["client-remove"]) { [weak self] _, output in
+            guard let self else { return }
+            self.connectionMode = .unavailable
+            self.printerOnline = false
+            self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.refreshStatus()
+        }
+    }
+
+    func useHistory(_ item: PrintHistoryItem) {
+        value = item.value
+        kind = item.kind
+        copies = item.copies
+    }
+
+    func clearHistory() {
+        history.removeAll()
+        saveHistory()
+    }
+
+    func printTest() {
+        value = "1234567890"
+        kind = .code128
+        copies = 1
+        printCurrent()
+    }
+
+    func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func execute(
+        arguments: [String],
+        completion: @escaping @MainActor (Int32, String) -> Void
+    ) {
+        let executable = cli
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard FileManager.default.isExecutableFile(atPath: executable) else {
+                Task { @MainActor in
+                    completion(127, "GX430T command backend is not installed.")
+                }
+                return
+            }
+
+            let process = Process()
+            let pipe = Pipe()
+
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+
+                Task { @MainActor in
+                    completion(process.terminationStatus, output)
+                }
+            } catch {
+                Task { @MainActor in
+                    completion(1, error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func loadHistory() {
+        guard
+            let data = UserDefaults.standard.data(forKey: historyKey),
+            let decoded = try? JSONDecoder().decode([PrintHistoryItem].self, from: data)
+        else {
+            return
+        }
+
+        history = decoded
+    }
+
+    private func saveHistory() {
+        guard let data = try? JSONEncoder().encode(history) else { return }
+        UserDefaults.standard.set(data, forKey: historyKey)
+    }
+}
+
+struct GX430TBrandMark: View {
+    var size: CGFloat = 48
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: "printer.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.18)
+            }
+        }
+        .frame(width: size, height: size)
+        .foregroundStyle(.primary)
+        .onAppear {
+            guard
+                let url = Bundle.main.url(
+                    forResource: "ZEBRAGX430TLOGO",
+                    withExtension: "svg"
+                ),
+                let loaded = NSImage(contentsOf: url)
+            else {
+                return
+            }
+
+            loaded.isTemplate = true
+            image = loaded
+        }
+    }
+}
+
+struct GX430TFormatSelector: View {
+    @Binding var selection: PrintKind
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(PrintKind.allCases) { kind in
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        selection = kind
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 12, weight: .semibold))
+
+                        Text(kind.rawValue)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(selection == kind ? Color.white : Color.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(selection == kind ? Color.accentColor : Color.clear)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(.quaternary.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Print format")
+    }
+}
+
+struct LabelPreview: View {
+    let value: String
+    let kind: PrintKind
+
+    private var previewValue: String {
+        value.isEmpty ? "Your label preview" : value
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 10)
+
+            switch kind {
+            case .text:
+                Text(previewValue)
+                    .font(.system(size: 28, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.35)
+                    .padding(.horizontal)
+
+            case .code128, .code39:
+                BarcodePreview(value: previewValue)
+                Text(previewValue)
+                    .font(.system(size: 16, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
+
+            case .qr:
+                Image(systemName: "qrcode")
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 145, height: 145)
+
+                Text(previewValue)
+                    .font(.system(size: 13, design: .monospaced))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.5)
+            }
+
+            Spacer(minLength: 10)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260)
+        .foregroundStyle(.black)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.black.opacity(0.14), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
+        .padding(.vertical, 8)
+    }
+}
+
+struct BarcodePreview: View {
+    let value: String
+
+    private var bars: [CGFloat] {
+        let seed = value.utf8.reduce(0) { ($0 &* 31) &+ Int($1) }
+        return (0..<56).map { index in
+            let mixed = abs(seed &+ index &* 17 &+ index &* index &* 3)
+            return CGFloat((mixed % 4) + 1)
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 1.5) {
+            ForEach(Array(bars.enumerated()), id: \.offset) { index, width in
+                Rectangle()
+                    .frame(width: width, height: index.isMultiple(of: 7) ? 130 : 116)
+            }
+        }
+        .frame(maxWidth: 430)
+        .clipped()
+        .padding(.horizontal, 24)
+    }
+}
+
+struct QuickPrintView: View {
+    @EnvironmentObject private var model: GX430TModel
+    @State private var showingHistory = false
+    @State private var showingConnection = false
+
+    var body: some View {
+        NavigationSplitView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        GX430TBrandMark(size: 48)
+                            .foregroundStyle(.primary)
+
+                        Text("GX430T")
+                            .font(.system(size: 26, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+
+                        Spacer(minLength: 0)
+                    }
+
+                    Label(
+                        model.printerStatus,
+                        systemImage: model.printerOnline ? "printer.fill" : "printer"
+                    )
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(model.printerOnline ? .green : .secondary)
+                    .lineLimit(2)
+                }
+
+                Divider()
+
+                Button {
+                    showingHistory = false
+                } label: {
+                    Label("Quick Print", systemImage: "bolt.fill")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showingHistory = true
+                } label: {
+                    Label("History", systemImage: "clock.arrow.circlepath")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showingConnection = true
+                } label: {
+                    Label("Connection", systemImage: model.connectionMode.symbol)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button {
+                    model.refreshStatus()
+                } label: {
+                    Label("Refresh Printer", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Native GX430T control")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    GX430TLicenseFooter(compact: true)
+                }
+            }
+            .padding(22)
+            .navigationSplitViewColumnWidth(min: 230, ideal: 250, max: 280)
+        } detail: {
+            if showingHistory {
+                HistoryView()
+            } else {
+                quickPrint
+            }
+        }
+        .frame(minWidth: 920, minHeight: 650)
+        .sheet(isPresented: $showingConnection) {
+            ConnectionView()
+                .environmentObject(model)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    model.refreshStatus()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+
+                Button {
+                    model.printCurrent()
+                } label: {
+                    Label("Print", systemImage: "printer.fill")
+                }
+                .disabled(!model.canPrint)
+            }
+        }
+    }
+
+    private var quickPrint: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Quick Print")
+                            .font(.system(size: 34, weight: .bold))
+                        Text("Type, preview and print.")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if model.isPrinting {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("FORMAT")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.9)
+                        .foregroundStyle(.secondary)
+
+                    GX430TFormatSelector(selection: $model.kind)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("Label content", systemImage: "square.and.pencil")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("\(model.value.count) characters")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    TextEditor(text: $model.value)
+                        .font(.system(size: 19, weight: .medium, design: .rounded))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 96, maxHeight: 135)
+                }
+                .padding(16)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(.primary.opacity(0.09), lineWidth: 1)
+                }
+
+                LabelPreview(value: model.value, kind: model.kind)
+
+                HStack(spacing: 18) {
+                    Stepper("Copies: \(model.copies)", value: $model.copies, in: 1...999)
+                        .frame(width: 180)
+
+                    Spacer()
+
+                    Button("Test Label") {
+                        model.printTest()
+                    }
+
+                    Button {
+                        model.printCurrent()
+                    } label: {
+                        Label(
+                            model.isPrinting ? "Printing…" : "Print",
+                            systemImage: "printer.fill"
+                        )
+                        .frame(minWidth: 110)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(!model.canPrint)
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle")
+                        .foregroundStyle(model.printerOnline ? .green : .secondary)
+
+                    Text(model.message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(.quaternary.opacity(0.45))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                HStack {
+                    GX430TLicenseFooter()
+                    Spacer()
+                    Text("GX430T Mac Control")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 2)
+            }
+            .padding(30)
+        }
+    }
+}
+
+struct HistoryView: View {
+    @EnvironmentObject private var model: GX430TModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Print History")
+                        .font(.system(size: 34, weight: .bold))
+                    Text("Your latest 100 print jobs.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Clear History", role: .destructive) {
+                    model.clearHistory()
+                }
+                .disabled(model.history.isEmpty)
+            }
+
+            if model.history.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: "printer")
+                        .font(.system(size: 44, weight: .regular))
+                        .foregroundStyle(.secondary)
+
+                    Text("No Print History")
+                        .font(.title2.weight(.semibold))
+
+                    Text("Completed print jobs will appear here.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            } else {
+                List(model.history) { item in
+                    HStack(spacing: 14) {
+                        Image(systemName: item.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(item.succeeded ? .green : .red)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.value)
+                                .lineLimit(1)
+                                .font(.headline)
+
+                            Text("\(item.kind.rawValue) · \(item.copies) \(item.copies == 1 ? "copy" : "copies") · \(item.date.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Use Again") {
+                            model.useHistory(item)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+                .listStyle(.inset)
+            }
+        }
+        .padding(30)
+    }
+}
+
+struct ConnectionView: View {
+    @EnvironmentObject private var model: GX430TModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.blue.opacity(0.12))
+                        .frame(width: 54, height: 54)
+
+                    Image(systemName: model.connectionMode.symbol)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("GX430T Connection")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    Text(model.connectionMode.rawValue)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if model.connectionMode == .local {
+                Label(
+                    "This Mac is the USB Print Host.",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green)
+
+                Text("Other Macs and iPhones can pair with this Mac and send secure print jobs over the local network.")
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Button {
+                        model.enableAppAutostart()
+                    } label: {
+                        Label("Launch at Login", systemImage: "power")
+                    }
+
+                    Button {
+                        model.restartPrintHost()
+                    } label: {
+                        Label("Restart Print Host", systemImage: "arrow.clockwise")
+                    }
+
+                    Spacer()
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Pair with the work Mac")
+                        .font(.headline)
+
+                    TextField("Host address — for example 192.168.1.5:43043", text: $model.hostURL)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Six-digit pairing code", text: $model.pairingCode)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("This Mac name", text: $model.clientName)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        if model.connectionMode == .remote {
+                            Button("Remove Pairing", role: .destructive) {
+                                model.removeClientPairing()
+                            }
+                        }
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            dismiss()
+                        }
+
+                        Button {
+                            model.pairWithHost { succeeded in
+                                if succeeded {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            if model.isPairing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(width: 90)
+                            } else {
+                                Text("Pair Mac")
+                                    .frame(width: 90)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isPairing)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
+                    .foregroundStyle(model.printerOnline ? .green : .secondary)
+
+                Text(model.message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Spacer()
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
+    }
+}
+
+struct MenuBarContent: View {
+    @EnvironmentObject private var model: GX430TModel
+    @FocusState private var inputFocused: Bool
+
+    private var statusColor: Color {
+        model.printerOnline ? .green : .orange
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(statusColor.opacity(0.14))
+                        .frame(width: 46, height: 46)
+
+                    GX430TBrandMark(size: 38)
+                        .foregroundStyle(statusColor)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GX430T")
+                        .font(.system(size: 18, weight: .bold))
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 7, height: 7)
+
+                        Text(model.printerStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    model.refreshStatus()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh printer status")
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Quick Print")
+                    .font(.headline)
+
+                TextField("Type what you want to print", text: $model.value, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .focused($inputFocused)
+                    .onSubmit {
+                        if model.canPrint {
+                            model.printCurrent()
+                        }
+                    }
+
+                GX430TFormatSelector(selection: $model.kind)
+
+                HStack {
+                    Stepper(value: $model.copies, in: 1...999) {
+                        Text("\(model.copies) \(model.copies == 1 ? "copy" : "copies")")
+                            .font(.callout)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        model.printCurrent()
+                    } label: {
+                        HStack(spacing: 7) {
+                            if model.isPrinting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "printer.fill")
+                            }
+
+                            Text(model.isPrinting ? "Printing…" : "Print")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(minWidth: 86)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(!model.canPrint)
+                }
+            }
+
+            if !model.message.isEmpty {
+                HStack(alignment: .top, spacing: 7) {
+                    Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
+                        .foregroundStyle(model.printerOnline ? .green : .secondary)
+
+                    Text(model.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(.quaternary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+            }
+
+            if !model.history.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("Recent")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+                    }
+
+                    ForEach(Array(model.history.prefix(3))) { item in
+                        Button {
+                            model.useHistory(item)
+                            inputFocused = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: item.kind.symbol)
+                                    .frame(width: 17)
+                                    .foregroundStyle(.secondary)
+
+                                Text(item.value)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Text("×\(item.copies)")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Button {
+                    model.openMainWindow()
+                } label: {
+                    Label("Open App", systemImage: "macwindow")
+                }
+
+                Text(model.connectionMode.rawValue)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+
+                Menu {
+                    Button("Print Test Label") {
+                        model.printTest()
+                    }
+
+                    Button("Refresh Status") {
+                        model.refreshStatus()
+                    }
+
+                    Button("Launch at Login") {
+                        model.enableAppAutostart()
+                    }
+
+                    if model.connectionMode == .local {
+                        Button("Restart Print Host") {
+                            model.restartPrintHost()
+                        }
+                    }
+
+                    Divider()
+
+                    Button("Quit GX430T", role: .destructive) {
+                        NSApp.terminate(nil)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+
+            GX430TLicenseFooter(compact: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(width: 390)
+        .onAppear {
+            model.refreshStatus()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                inputFocused = true
+            }
+        }
+    }
+}
+
+@main
+struct GX430TMacControlApp: App {
+    @StateObject private var model = GX430TModel()
+
+    var body: some Scene {
+        WindowGroup("GX430T") {
+            QuickPrintView()
+                .environmentObject(model)
+        }
+        .defaultSize(width: 1060, height: 720)
+        .windowStyle(.titleBar)
+
+        MenuBarExtra {
+            MenuBarContent()
+                .environmentObject(model)
+        } label: {
+            Image(systemName: model.printerOnline ? "printer.fill" : "printer")
+        }
+        .menuBarExtraStyle(.window)
+    }
+}
