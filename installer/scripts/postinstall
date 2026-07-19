@@ -4,20 +4,24 @@ set -euo pipefail
 chmod +x /usr/local/gx430t/bin/gx430tctl
 chmod +x /usr/local/gx430t/scripts/*.sh
 chmod +x /usr/local/gx430t/install/*.sh
+chmod +x "/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
 
-if [ -d "/usr/local/gx430t/GX430T Mac Control.app" ]; then
-  rm -rf "/Applications/GX430T Mac Control.app"
-  cp -R "/usr/local/gx430t/GX430T Mac Control.app" "/Applications/GX430T Mac Control.app"
-  chmod +x "/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl"
-fi
+# Remove the obsolete support-root application left by older packages.
+rm -rf "/usr/local/gx430t/GX430T Mac Control.app"
 
-ln -sf /usr/local/gx430t/bin/gx430tctl /usr/local/bin/gx430tctl
+ln -sfn \
+  /usr/local/gx430t/bin/gx430tctl \
+  /usr/local/bin/gx430tctl
 
+echo "GX430T_SINGLE_APPLICATION_INSTALL=true"
+echo "GX430T_APPLICATION_PATH=/Applications/GX430T Mac Control.app"
+echo "GX430T_LEGACY_SUPPORT_APPLICATION_REMOVED=true"
 echo "GX430T_POSTINSTALL_DONE=true"
 
 # GX430T_UPDATER_INSTALL_LINKS_V1
 if [[ -x /usr/local/gx430t/bin/gx430t-update ]]; then
   mkdir -p /usr/local/bin
-  ln -sfn     /usr/local/gx430t/bin/gx430t-update     /usr/local/bin/gx430t-update
+  ln -sfn \
+    /usr/local/gx430t/bin/gx430t-update \
+    /usr/local/bin/gx430t-update
 fi
-

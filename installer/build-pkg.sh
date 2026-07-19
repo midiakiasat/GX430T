@@ -2,7 +2,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${GX430T_VERSION:-0.1.0}"
+CONFIG="$ROOT/config/product-version.env"
+
+test -s "$CONFIG"
+
+REQUESTED_VERSION="${GX430T_VERSION:-}"
+
+# shellcheck disable=SC1090
+source "$CONFIG"
+
+VERSION="${REQUESTED_VERSION:-${GX430T_VERSION:?}}"
 IDENTIFIER="${GX430T_IDENTIFIER:-com.kaaffilm.gx430t.mac-control}"
 PKGROOT="$ROOT/installer/pkgroot"
 RELEASE="$ROOT/release"
@@ -52,16 +61,33 @@ bash "$ROOT/app/GX430TMacControl/build-app.sh"
 
 rsync -a \
   "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" \
-  "$PKGROOT/usr/local/gx430t/"
-
-rsync -a \
-  "$ROOT/app/GX430TMacControl/build/GX430T Mac Control.app" \
   "$PKGROOT/Applications/"
 
 chmod +x \
-  "$PKGROOT/usr/local/gx430t/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl" \
   "$PKGROOT/Applications/GX430T Mac Control.app/Contents/MacOS/GX430TMacControl" \
   "$PKGROOT/usr/local/gx430t/bin/gx430tctl"
+
+test -d "$PKGROOT/Applications/GX430T Mac Control.app"
+
+if test -e "$PKGROOT/usr/local/gx430t/GX430T Mac Control.app"; then
+  echo "GX430T_DUPLICATE_SUPPORT_APPLICATION_IN_PACKAGE=true" >&2
+  exit 1
+fi
+
+APPLICATION_COUNT="$(
+  find "$PKGROOT" \
+    -type d \
+    -name '*.app' \
+    -prune \
+    -print |
+  wc -l |
+  tr -d ' '
+)"
+
+if test "$APPLICATION_COUNT" != "1"; then
+  echo "GX430T_PACKAGE_APPLICATION_COUNT=$APPLICATION_COUNT" >&2
+  exit 1
+fi
 
 find "$PKGROOT/usr/local/gx430t/scripts" \
   -type f \
@@ -125,6 +151,10 @@ pkgbuild \
 
 shasum -a 256 "$PKG" > "$PKG.sha256"
 
+echo "GX430T_PACKAGE_APPLICATION_COUNT=1"
+echo "GX430T_APPLICATION_INSTALL_PATH=/Applications/GX430T Mac Control.app"
+echo "GX430T_SUPPORT_APPLICATION_COPY=false"
+echo "GX430T_PACKAGE_VERSION=$VERSION"
 echo "GX430T_PKG_BUILD_DONE=true"
 echo "PKG=$PKG"
 echo "SHA256=$PKG.sha256"
