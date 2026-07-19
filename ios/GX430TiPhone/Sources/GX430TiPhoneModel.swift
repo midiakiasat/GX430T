@@ -20,6 +20,10 @@ final class GX430TiPhoneModel: ObservableObject {
     @Published var isBusy = false
     @Published var showingPairing = false
 
+    @Published var queueState: GX430TQueueState?
+    @Published var queueMessage = "Pair this iPhone to use the queue."
+    @Published var queueBusy = false
+
     private let client = GX430TNetworkClient()
     private let connectionKey = "GX430TStoredConnection"
 
@@ -29,6 +33,7 @@ final class GX430TiPhoneModel: ObservableObject {
         if connection != nil {
             Task {
                 await refreshStatus()
+                await refreshQueue()
             }
         } else {
             showingPairing = true
@@ -65,6 +70,7 @@ final class GX430TiPhoneModel: ObservableObject {
             message = "iPhone paired with \(paired.hostName)."
 
             await refreshStatus()
+            await refreshQueue()
         } catch {
             message = error.localizedDescription
         }
@@ -134,13 +140,213 @@ final class GX430TiPhoneModel: ObservableObject {
         await printCurrent()
     }
 
+    func refreshQueue() async {
+        guard let connection else {
+            queueState = nil
+            queueMessage = "Pair this iPhone to use the queue."
+            return
+        }
+
+        guard !queueBusy else { return }
+
+        queueBusy = true
+        queueMessage = "Refreshing queue…"
+        defer { queueBusy = false }
+
+        do {
+            queueState = try await client.queueState(
+                connection: connection
+            )
+            queueMessage = "Queue refreshed securely from \(connection.hostName)."
+        } catch {
+            queueMessage = error.localizedDescription
+        }
+    }
+
+    func uploadQueueFile(_ url: URL) async {
+        guard let connection else {
+            queueMessage = "Pair this iPhone first."
+            showingPairing = true
+            return
+        }
+
+        guard !queueBusy else { return }
+
+        let accessed = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        queueBusy = true
+        queueMessage = "Uploading \(url.lastPathComponent)…"
+        defer { queueBusy = false }
+
+        do {
+            let data = try Data(contentsOf: url)
+
+            let response = try await client.uploadQueueFile(
+                connection: connection,
+                fileName: url.lastPathComponent,
+                contentType: queueContentType(for: url),
+                data: data
+            )
+
+            queueState = try await client.queueState(
+                connection: connection
+            )
+
+            queueMessage = "Uploaded \(response.labels) \(response.labels == 1 ? "label" : "labels") from \(response.file)."
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.success)
+        } catch {
+            queueMessage = error.localizedDescription
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.error)
+        }
+    }
+
+    func printNextQueueLabel() async {
+        guard let connection else {
+            queueMessage = "Pair this iPhone first."
+            showingPairing = true
+            return
+        }
+
+        guard !queueBusy else { return }
+
+        queueBusy = true
+        queueMessage = "Printing next queued label…"
+        defer { queueBusy = false }
+
+        do {
+            let response = try await client.printNextQueueLabel(
+                connection: connection
+            )
+
+            queueState = try await client.queueState(
+                connection: connection
+            )
+
+            queueMessage = response.message
+                ?? (
+                    response.printed == 0
+                    ? "Queue is empty."
+                    : "Next queued label was submitted."
+                )
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.success)
+        } catch {
+            queueMessage = error.localizedDescription
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.error)
+        }
+    }
+
+    func printAllQueueLabels() async {
+        guard let connection else {
+            queueMessage = "Pair this iPhone first."
+            showingPairing = true
+            return
+        }
+
+        guard !queueBusy else { return }
+
+        queueBusy = true
+        queueMessage = "Printing all queued labels…"
+        defer { queueBusy = false }
+
+        do {
+            let response = try await client.printAllQueueLabels(
+                connection: connection
+            )
+
+            if let responseState = response.state {
+                queueState = responseState
+            } else {
+                queueState = try await client.queueState(
+                    connection: connection
+                )
+            }
+
+            let printed = response.printed ?? 0
+
+            queueMessage = "Submitted \(printed) \(printed == 1 ? "label" : "labels") from the queue."
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.success)
+        } catch {
+            queueMessage = error.localizedDescription
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.error)
+        }
+    }
+
+    func clearQueue() async {
+        guard let connection else {
+            queueMessage = "Pair this iPhone first."
+            showingPairing = true
+            return
+        }
+
+        guard !queueBusy else { return }
+
+        queueBusy = true
+        queueMessage = "Clearing queue…"
+        defer { queueBusy = false }
+
+        do {
+            _ = try await client.clearQueue(
+                connection: connection
+            )
+
+            queueState = try await client.queueState(
+                connection: connection
+            )
+
+            queueMessage = "Queue cleared."
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.success)
+        } catch {
+            queueMessage = error.localizedDescription
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.error)
+        }
+    }
+
     func removePairing() {
         connection = nil
         printerOnline = false
         printerStatus = "Not paired"
+        queueState = nil
+        queueMessage = "Pair this iPhone to use the queue."
         UserDefaults.standard.removeObject(forKey: connectionKey)
         showingPairing = true
         message = "Pairing removed."
+    }
+
+    private func queueContentType(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "csv":
+            return "text/csv"
+        case "tsv":
+            return "text/tab-separated-values"
+        case "xlsx":
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "ods":
+            return "application/vnd.oasis.opendocument.spreadsheet"
+        default:
+            return "text/plain"
+        }
     }
 
     private func loadConnection() {

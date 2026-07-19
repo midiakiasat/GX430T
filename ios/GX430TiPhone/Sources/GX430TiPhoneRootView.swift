@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import GX430TKit
 
 private enum GX430TiPhoneLicence {
@@ -357,181 +358,633 @@ struct GX430TiPhoneRootWithQueueView: View {
     var body: some View {
         TabView {
             GX430TiPhoneRootView()
-                .tabItem { Label("Print", systemImage: "printer") }
+                .tabItem {
+                    Label(
+                        "Print",
+                        systemImage: "printer"
+                    )
+                }
 
             GX430TiPhoneUploadQueueView()
-                .tabItem { Label("Queue", systemImage: "tray.and.arrow.up") }
+                .tabItem {
+                    Label(
+                        "Queue",
+                        systemImage: "tray.and.arrow.up"
+                    )
+                }
         }
     }
 }
 
-
-import UniformTypeIdentifiers
-
 struct GX430TiPhoneUploadQueueView: View {
-    @State private var host: String = UserDefaults.standard.string(forKey: "GX430T_HOST") ?? "http://127.0.0.1:9430"
-    @State private var status: String = "Ready"
-    @State private var log: String = "Upload CSV/TSV/XLSX/ODS, refresh queue, print next, or print all.\n\nFor iPhone, set host to the Mac Print Host LAN address, for example:\nhttp://192.168.1.20:9430"
-    @State private var showImporter = false
+    @EnvironmentObject private var model: GX430TiPhoneModel
+
+    @State private var showingImporter = false
+    @State private var confirmingClear = false
+
+    private var supportedTypes: [UTType] {
+        [
+            "csv",
+            "tsv",
+            "xlsx",
+            "ods",
+            "txt"
+        ].compactMap {
+            UTType(filenameExtension: $0)
+        }
+    }
+
+    private var jobs: [GX430TQueueJob] {
+        model.queueState?.jobs ?? []
+    }
 
     var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Print Host")) {
-                    TextField("http://Mac-IP:9430", text: $host)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                    Button("Save Host") {
-                        UserDefaults.standard.set(host, forKey: "GX430T_HOST")
-                        status = "Host saved"
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    GX430TBrandHeader()
+
+                    connectionCard
+                    queueSummary
+                    queueControls
+                    queueJobs
+                    queueResult
+                    licenceFooter
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 34)
+            }
+            .background(
+                Color(uiColor: .systemGroupedBackground)
+            )
+            .navigationTitle("Upload Queue")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(
+                    placement: .topBarLeading
+                ) {
+                    Button {
+                        model.showingPairing = true
+                    } label: {
+                        Image(systemName: "link")
                     }
+                    .accessibilityLabel("Connection")
                 }
 
-                Section(header: Text("Upload Queue")) {
-                    Button("Choose Sheet File") {
-                        showImporter = true
+                ToolbarItem(
+                    placement: .topBarTrailing
+                ) {
+                    Button {
+                        Task {
+                            await model.refreshQueue()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
                     }
-                    Button("Refresh Queue") {
-                        request(path: "/api/state")
-                    }
-                    Button("Print Next") {
-                        post(path: "/api/print-next")
-                    }
-                    Button("Print All") {
-                        post(path: "/api/print-all")
-                    }
-                }
-
-                Section(header: Text("Status")) {
-                    Text(status)
-                        .font(.headline)
-                    ScrollView {
-                        Text(log)
-                            .font(.system(.footnote, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(minHeight: 220)
+                    .disabled(
+                        model.connection == nil ||
+                        model.queueBusy
+                    )
+                    .accessibilityLabel("Refresh queue")
                 }
             }
-            .navigationTitle("Upload Queue")
+            .sheet(
+                isPresented: $model.showingPairing
+            ) {
+                GX430TPairingView()
+                    .environmentObject(model)
+                    .interactiveDismissDisabled(
+                        model.connection == nil
+                    )
+            }
         }
         .fileImporter(
-            isPresented: $showImporter,
-            allowedContentTypes: [
-                UTType.commaSeparatedText,
-                UTType(filenameExtension: "csv")!,
-                UTType(filenameExtension: "txt")!,
-                UTType(filenameExtension: "tsv")!,
-                UTType(filenameExtension: "xlsx")!,
-                UTType(filenameExtension: "ods")!
-            ],
+            isPresented: $showingImporter,
+            allowedContentTypes: supportedTypes,
             allowsMultipleSelection: false
         ) { result in
             switch result {
             case .success(let urls):
-                guard let url = urls.first else { return }
-                upload(url: url)
+                guard let url = urls.first else {
+                    model.queueMessage = "No file was selected."
+                    return
+                }
+
+                Task {
+                    await model.uploadQueueFile(url)
+                }
+
             case .failure(let error):
-                status = "Import failed"
-                log = error.localizedDescription
+                model.queueMessage = error.localizedDescription
             }
         }
-    }
-
-    func normalizedHost() -> String {
-        var h = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !h.hasPrefix("http://") && !h.hasPrefix("https://") {
-            h = "http://" + h
-        }
-        return h.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    }
-
-    func request(path: String) {
-        guard let url = URL(string: normalizedHost() + path) else {
-            status = "Bad host"
-            return
-        }
-        status = "Requesting…"
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    status = "Failed"
-                    log = error.localizedDescription
-                    return
+        .confirmationDialog(
+            "Clear all queue jobs?",
+            isPresented: $confirmingClear,
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Clear Queue",
+                role: .destructive
+            ) {
+                Task {
+                    await model.clearQueue()
                 }
-                status = "OK"
-                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
             }
-        }.resume()
+
+            Button(
+                "Cancel",
+                role: .cancel
+            ) {}
+        } message: {
+            Text(
+                "Queued, printed, and failed records will be removed."
+            )
+        }
+        .task {
+            if model.connection != nil {
+                await model.refreshQueue()
+            }
+        }
     }
 
-    func post(path: String) {
-        guard let url = URL(string: normalizedHost() + path) else {
-            status = "Bad host"
-            return
-        }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        status = "Sending…"
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    status = "Failed"
-                    log = error.localizedDescription
-                    return
-                }
-                status = "OK"
-                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
+    private var connectionCard: some View {
+        HStack(spacing: 13) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: 15,
+                    style: .continuous
+                )
+                .fill(
+                    model.connection == nil
+                        ? Color.orange.opacity(0.13)
+                        : Color.green.opacity(0.13)
+                )
+
+                Image(
+                    systemName: model.connection == nil
+                        ? "link.badge.plus"
+                        : "lock.shield.fill"
+                )
+                .font(
+                    .system(
+                        size: 22,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(
+                    model.connection == nil
+                        ? .orange
+                        : .green
+                )
             }
-        }.resume()
+            .frame(width: 50, height: 50)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(
+                    model.connection == nil
+                        ? "Pair iPhone"
+                        : "Authenticated Queue"
+                )
+                .font(.headline)
+
+                Text(
+                    model.connection?.hostName
+                    ?? "Connect to the work Mac"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                if let connection = model.connection {
+                    Text(
+                        "\(connection.hostURL.host ?? "Print Host"):43043 · Protocol \(connection.protocolVersion)"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if model.connection == nil {
+                Button("Pair") {
+                    model.showingPairing = true
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityLabel(
+                        "Authenticated connection"
+                    )
+            }
+        }
+        .padding(15)
+        .background(
+            Color(
+                uiColor: .secondarySystemGroupedBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+            .stroke(
+                .primary.opacity(0.06),
+                lineWidth: 1
+            )
+        }
     }
 
-    func upload(url: URL) {
-        let access = url.startAccessingSecurityScopedResource()
-        defer {
-            if access { url.stopAccessingSecurityScopedResource() }
+    private var queueSummary: some View {
+        HStack(spacing: 10) {
+            summaryCard(
+                title: "Queued",
+                count: model.queueState?.counts.queued ?? 0,
+                symbol: "tray.full.fill"
+            )
+
+            summaryCard(
+                title: "Printed",
+                count: model.queueState?.counts.printed ?? 0,
+                symbol: "checkmark.circle.fill"
+            )
+
+            summaryCard(
+                title: "Errors",
+                count: model.queueState?.counts.error ?? 0,
+                symbol: "exclamationmark.triangle.fill"
+            )
         }
+    }
 
-        guard let data = try? Data(contentsOf: url) else {
-            status = "Could not read file"
-            return
-        }
+    private var queueControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Queue control")
+                    .font(.title3.weight(.bold))
 
-        guard let endpoint = URL(string: normalizedHost() + "/api/upload") else {
-            status = "Bad host"
-            return
-        }
+                Spacer()
 
-        let boundary = "GX430TBoundary\(UUID().uuidString)"
-        var body = Data()
-        let filename = url.lastPathComponent
-        let contentType = filename.lowercased().hasSuffix(".xlsx")
-            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            : "text/csv"
-
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-
-        var req = URLRequest(url: endpoint)
-        req.httpMethod = "POST"
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        req.httpBody = body
-
-        status = "Uploading \(filename)…"
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    status = "Upload failed"
-                    log = error.localizedDescription
-                    return
+                if model.queueBusy {
+                    ProgressView()
+                        .controlSize(.small)
                 }
-                status = "Uploaded"
-                log = String(data: data ?? Data(), encoding: .utf8) ?? ""
             }
-        }.resume()
+
+            Button {
+                showingImporter = true
+            } label: {
+                Label(
+                    "Choose Sheet File",
+                    systemImage: "doc.badge.plus"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(
+                model.connection == nil ||
+                model.queueBusy
+            )
+
+            HStack {
+                Button {
+                    Task {
+                        await model.printNextQueueLabel()
+                    }
+                } label: {
+                    Label(
+                        "Print Next",
+                        systemImage: "printer"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    model.connection == nil ||
+                    model.queueBusy ||
+                    (model.queueState?.counts.queued ?? 0) == 0
+                )
+
+                Button {
+                    Task {
+                        await model.printAllQueueLabels()
+                    }
+                } label: {
+                    Label(
+                        "Print All",
+                        systemImage: "printer.fill"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    model.connection == nil ||
+                    model.queueBusy ||
+                    (model.queueState?.counts.queued ?? 0) == 0
+                )
+            }
+
+            Button(role: .destructive) {
+                confirmingClear = true
+            } label: {
+                Label(
+                    "Clear Queue",
+                    systemImage: "trash"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(
+                model.connection == nil ||
+                model.queueBusy ||
+                jobs.isEmpty
+            )
+
+            Text(
+                "Supports CSV, TSV, XLSX, ODS, headerless barcode sheets, quantity expansion, and ordered printing."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(17)
+        .background(
+            Color(
+                uiColor: .secondarySystemGroupedBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+            .stroke(
+                .primary.opacity(0.06),
+                lineWidth: 1
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var queueJobs: some View {
+        if jobs.isEmpty {
+            VStack(spacing: 13) {
+                Image(systemName: "tray")
+                    .font(
+                        .system(
+                            size: 40,
+                            weight: .regular
+                        )
+                    )
+                    .foregroundStyle(.secondary)
+
+                Text("Queue Empty")
+                    .font(.title3.weight(.semibold))
+
+                Text(
+                    model.connection == nil
+                        ? "Pair this iPhone with the work Mac to access the shared queue."
+                        : "Choose a sheet file to create ordered label jobs."
+                )
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 34)
+            .padding(.horizontal, 18)
+            .background(
+                Color(
+                    uiColor: .secondarySystemGroupedBackground
+                )
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 20,
+                    style: .continuous
+                )
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Queue jobs")
+                    .font(.title3.weight(.bold))
+
+                ForEach(jobs) { job in
+                    HStack(spacing: 12) {
+                        Image(
+                            systemName: statusSymbol(
+                                job.status
+                            )
+                        )
+                        .foregroundStyle(
+                            statusColor(
+                                job.status
+                            )
+                        )
+                        .frame(width: 24)
+
+                        VStack(
+                            alignment: .leading,
+                            spacing: 3
+                        ) {
+                            Text(job.barcode)
+                                .font(
+                                    .system(
+                                        .headline,
+                                        design: .monospaced
+                                    )
+                                )
+                                .lineLimit(1)
+
+                            if
+                                let title = job.title,
+                                !title.isEmpty,
+                                title != job.barcode
+                            {
+                                Text(title)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                            }
+
+                            HStack(spacing: 5) {
+                                if let file = job.sourceFile {
+                                    Text(file)
+                                }
+
+                                if let row = job.sourceRow {
+                                    Text("row \(row)")
+                                }
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        VStack(
+                            alignment: .trailing,
+                            spacing: 3
+                        ) {
+                            Text(job.status.capitalized)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(
+                                    statusColor(
+                                        job.status
+                                    )
+                                )
+
+                            Text("#\(job.id)")
+                                .font(
+                                    .caption2.monospacedDigit()
+                                )
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+
+                    if job.id != jobs.last?.id {
+                        Divider()
+                    }
+                }
+            }
+            .padding(17)
+            .background(
+                Color(
+                    uiColor: .secondarySystemGroupedBackground
+                )
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 22,
+                    style: .continuous
+                )
+            )
+        }
+    }
+
+    private var queueResult: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(
+                systemName: model.queueBusy
+                    ? "arrow.triangle.2.circlepath"
+                    : "lock.shield"
+            )
+            .foregroundStyle(.secondary)
+
+            Text(model.queueMessage)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            Color(
+                uiColor: .secondarySystemGroupedBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+    }
+
+    private var licenceFooter: some View {
+        Link(
+            destination:
+                GX430TiPhoneLicence.repositoryURL
+        ) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.seal")
+                Text("Licence and source")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func summaryCard(
+        title: String,
+        count: Int,
+        symbol: String
+    ) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text("\(count)")
+                .font(.title2.weight(.bold))
+                .monospacedDigit()
+
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            Color(
+                uiColor: .secondarySystemGroupedBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 17,
+                style: .continuous
+            )
+        )
+    }
+
+    private func statusSymbol(
+        _ status: String
+    ) -> String {
+        switch status.lowercased() {
+        case "printed":
+            return "checkmark.circle.fill"
+        case "error":
+            return "exclamationmark.triangle.fill"
+        default:
+            return "tray.full.fill"
+        }
+    }
+
+    private func statusColor(
+        _ status: String
+    ) -> Color {
+        switch status.lowercased() {
+        case "printed":
+            return .green
+        case "error":
+            return .red
+        default:
+            return .blue
+        }
     }
 }
-

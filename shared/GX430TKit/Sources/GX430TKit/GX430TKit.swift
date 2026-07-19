@@ -90,6 +90,63 @@ public struct GX430TPrintRequest: Codable, Sendable {
     }
 }
 
+public struct GX430TQueueCounts: Codable, Sendable {
+    public let queued: Int
+    public let printed: Int
+    public let error: Int
+}
+
+public struct GX430TQueueJob: Codable, Identifiable, Sendable {
+    public let id: Int
+    public let created: Double
+    public let position: Double
+    public let sourceFile: String?
+    public let sourceRow: Int?
+    public let barcode: String
+    public let title: String?
+    public let status: String
+    public let printed: Double?
+    public let lastError: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case created
+        case position
+        case sourceFile = "source_file"
+        case sourceRow = "source_row"
+        case barcode
+        case title
+        case status
+        case printed
+        case lastError = "last_error"
+    }
+}
+
+public struct GX430TQueueState: Codable, Sendable {
+    public let ok: Bool
+    public let version: String
+    public let counts: GX430TQueueCounts
+    public let jobs: [GX430TQueueJob]
+}
+
+public struct GX430TQueueUploadResponse: Codable, Sendable {
+    public let ok: Bool
+    public let file: String
+    public let rows: Int
+    public let labels: Int
+    public let error: String?
+}
+
+public struct GX430TQueueActionResponse: Codable, Sendable {
+    public let ok: Bool
+    public let printed: Int?
+    public let cleared: Bool?
+    public let message: String?
+    public let error: String?
+    public let barcode: String?
+    public let state: GX430TQueueState?
+}
+
 public struct GX430TStoredConnection: Codable, Sendable {
     public let hostURL: URL
     public let hostName: String
@@ -320,6 +377,192 @@ public actor GX430TNetworkClient {
         }
 
         return payload
+    }
+
+    public func queueState(
+        connection: GX430TStoredConnection
+    ) async throws -> GX430TQueueState {
+        var request = URLRequest(
+            url: connection.hostURL.appending(path: "api/state")
+        )
+
+        authorize(
+            request: &request,
+            connection: connection
+        )
+
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data)
+
+        let payload = try decoder.decode(
+            GX430TQueueState.self,
+            from: data
+        )
+
+        guard payload.ok else {
+            throw GX430TClientError.server(
+                "The queue state is unavailable."
+            )
+        }
+
+        return payload
+    }
+
+    public func uploadQueueFile(
+        connection: GX430TStoredConnection,
+        fileName: String,
+        contentType: String,
+        data: Data
+    ) async throws -> GX430TQueueUploadResponse {
+        let cleanName = fileName
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+
+        guard !cleanName.isEmpty, !data.isEmpty else {
+            throw GX430TClientError.invalidContent
+        }
+
+        let boundary = "GX430TBoundary\(UUID().uuidString)"
+        var body = Data()
+
+        appendUTF8(
+            "--\(boundary)\r\n",
+            to: &body
+        )
+
+        appendUTF8(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"\(cleanName)\"\r\n",
+            to: &body
+        )
+
+        appendUTF8(
+            "Content-Type: \(contentType)\r\n\r\n",
+            to: &body
+        )
+
+        body.append(data)
+
+        appendUTF8(
+            "\r\n--\(boundary)--\r\n",
+            to: &body
+        )
+
+        var request = URLRequest(
+            url: connection.hostURL.appending(path: "api/upload")
+        )
+
+        request.httpMethod = "POST"
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+        request.httpBody = body
+
+        authorize(
+            request: &request,
+            connection: connection
+        )
+
+        let (responseData, response) = try await session.data(
+            for: request
+        )
+
+        try validate(
+            response: response,
+            data: responseData
+        )
+
+        let payload = try decoder.decode(
+            GX430TQueueUploadResponse.self,
+            from: responseData
+        )
+
+        guard payload.ok else {
+            throw GX430TClientError.server(
+                payload.error ?? "Queue upload failed."
+            )
+        }
+
+        return payload
+    }
+
+    public func printNextQueueLabel(
+        connection: GX430TStoredConnection
+    ) async throws -> GX430TQueueActionResponse {
+        try await queueAction(
+            connection: connection,
+            path: "api/print-next"
+        )
+    }
+
+    public func printAllQueueLabels(
+        connection: GX430TStoredConnection
+    ) async throws -> GX430TQueueActionResponse {
+        try await queueAction(
+            connection: connection,
+            path: "api/print-all"
+        )
+    }
+
+    public func clearQueue(
+        connection: GX430TStoredConnection
+    ) async throws -> GX430TQueueActionResponse {
+        try await queueAction(
+            connection: connection,
+            path: "api/clear"
+        )
+    }
+
+    private func queueAction(
+        connection: GX430TStoredConnection,
+        path: String
+    ) async throws -> GX430TQueueActionResponse {
+        var request = URLRequest(
+            url: connection.hostURL.appending(path: path)
+        )
+
+        request.httpMethod = "POST"
+
+        authorize(
+            request: &request,
+            connection: connection
+        )
+
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data)
+
+        let payload = try decoder.decode(
+            GX430TQueueActionResponse.self,
+            from: data
+        )
+
+        guard payload.ok else {
+            throw GX430TClientError.server(
+                payload.error
+                ?? payload.message
+                ?? "Queue action failed."
+            )
+        }
+
+        return payload
+    }
+
+    private func authorize(
+        request: inout URLRequest,
+        connection: GX430TStoredConnection
+    ) {
+        request.setValue(
+            "Bearer \(connection.token)",
+            forHTTPHeaderField: "Authorization"
+        )
+    }
+
+    private func appendUTF8(
+        _ value: String,
+        to data: inout Data
+    ) {
+        data.append(Data(value.utf8))
     }
 
     private func validate(response: URLResponse, data: Data) throws {
