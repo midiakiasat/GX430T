@@ -2,6 +2,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
+CONFIG="$REPO_ROOT/config/product-version.env"
+
+test -s "$CONFIG"
+
+# shellcheck disable=SC1090
+source "$CONFIG"
+
+: "${GX430T_VERSION:?}"
+: "${GX430T_BUILD:?}"
+
 BUILD="$ROOT/build"
 APP="$BUILD/GX430T Mac Control.app"
 CONTENTS="$APP/Contents"
@@ -54,6 +65,14 @@ chmod 755 "$MACOS/GX430TMacControl"
 
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 
+/usr/libexec/PlistBuddy \
+  -c "Set :CFBundleShortVersionString $GX430T_VERSION" \
+  "$CONTENTS/Info.plist"
+
+/usr/libexec/PlistBuddy \
+  -c "Set :CFBundleVersion $GX430T_BUILD" \
+  "$CONTENTS/Info.plist"
+
 rsync -a \
   --exclude "Info.plist" \
   "$ROOT/Resources/" \
@@ -71,6 +90,23 @@ echo "GX430T_NATIVE_APP_ARCHITECTURES=$ARCHITECTURES"
 echo "$ARCHITECTURES" | grep -qw arm64
 echo "$ARCHITECTURES" | grep -qw x86_64
 
+APP_VERSION="$(
+  /usr/libexec/PlistBuddy \
+    -c 'Print :CFBundleShortVersionString' \
+    "$CONTENTS/Info.plist"
+)"
+
+APP_BUILD="$(
+  /usr/libexec/PlistBuddy \
+    -c 'Print :CFBundleVersion' \
+    "$CONTENTS/Info.plist"
+)"
+
+test "$APP_VERSION" = "$GX430T_VERSION"
+test "$APP_BUILD" = "$GX430T_BUILD"
+
 echo "GX430T_NATIVE_APP_UNIVERSAL=true"
+echo "GX430T_NATIVE_APP_VERSION=$APP_VERSION"
+echo "GX430T_NATIVE_APP_BUILD=$APP_BUILD"
 echo "GX430T_NATIVE_APP_BUILD_DONE=true"
 echo "APP=$APP"
