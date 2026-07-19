@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 enum GX430TBrand {
     static let repositoryURL = URL(string: "https://github.com/midiakiasat/GX430T")!
@@ -40,6 +41,51 @@ enum GX430TConnectionMode: String {
         case .unavailable: return "exclamationmark.triangle"
         }
     }
+}
+
+enum GX430TMainSection: String {
+    case quickPrint
+    case uploadQueue
+    case history
+}
+
+struct GX430TQueueCounts: Codable {
+    let queued: Int
+    let printed: Int
+    let error: Int
+}
+
+struct GX430TQueueJob: Codable, Identifiable {
+    let id: Int
+    let created: Double
+    let position: Double
+    let sourceFile: String?
+    let sourceRow: Int?
+    let barcode: String
+    let title: String?
+    let status: String
+    let printed: Double?
+    let lastError: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case created
+        case position
+        case sourceFile = "source_file"
+        case sourceRow = "source_row"
+        case barcode
+        case title
+        case status
+        case printed
+        case lastError = "last_error"
+    }
+}
+
+struct GX430TQueueState: Codable {
+    let ok: Bool
+    let version: String
+    let counts: GX430TQueueCounts
+    let jobs: [GX430TQueueJob]
 }
 
 enum PrintKind: String, CaseIterable, Identifiable, Codable {
@@ -92,6 +138,12 @@ final class GX430TModel: ObservableObject {
     @Published var pairingCode = ""
     @Published var clientName = Host.current().localizedName ?? "GX430T Mac"
     @Published var isPairing = false
+
+    @Published var mainSection: GX430TMainSection = .quickPrint
+    @Published var queueState: GX430TQueueState?
+    @Published var queueMessage = "Queue ready."
+    @Published var queueLastOutput = ""
+    @Published var queueBusy = false
 
     private let historyKey = "GX430TPrintHistory"
     private let cli = "/usr/local/bin/gx430tctl"
@@ -330,11 +382,199 @@ final class GX430TModel: ObservableObject {
         printCurrent()
     }
 
-    func openMainWindow() {
+    func refreshQueue(
+        successMessage: String? = nil
+    ) {
+        queueBusy = true
+
+        if successMessage == nil {
+            queueMessage = "Refreshing queue…"
+        }
+
+        execute(arguments: ["queue-status"]) { [weak self] code, output in
+            guard let self else { return }
+
+            self.queueLastOutput = output
+
+            guard code == 0 else {
+                self.queueBusy = false
+                self.queueMessage = self.queueFailureMessage(
+                    output,
+                    fallback: "Queue status is unavailable."
+                )
+                NSSound.beep()
+                return
+            }
+
+            guard
+                let data = output.data(using: .utf8),
+                let state = try? JSONDecoder().decode(
+                    GX430TQueueState.self,
+                    from: data
+                )
+            else {
+                self.queueBusy = false
+                self.queueMessage = "Queue returned an invalid response."
+                NSSound.beep()
+                return
+            }
+
+            self.queueState = state
+            self.queueBusy = false
+            self.queueMessage = successMessage ?? "Queue refreshed."
+        }
+    }
+
+    func uploadQueueFile(_ sourceURL: URL) {
+        guard !queueBusy else { return }
+
+        let accessed = sourceURL.startAccessingSecurityScopedResource()
+
+        defer {
+            if accessed {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let importDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "GX430TQueueImports",
+                isDirectory: true
+            )
+
+        let stagedURL = importDirectory.appendingPathComponent(
+            "\(UUID().uuidString)-\(sourceURL.lastPathComponent)"
+        )
+
+        do {
+            try FileManager.default.createDirectory(
+                at: importDirectory,
+                withIntermediateDirectories: true
+            )
+
+            if FileManager.default.fileExists(atPath: stagedURL.path) {
+                try FileManager.default.removeItem(at: stagedURL)
+            }
+
+            try FileManager.default.copyItem(
+                at: sourceURL,
+                to: stagedURL
+            )
+        } catch {
+            queueMessage = "Could not prepare the selected file: \(error.localizedDescription)"
+            NSSound.beep()
+            return
+        }
+
+        queueBusy = true
+        queueMessage = "Uploading \(sourceURL.lastPathComponent)…"
+
+        execute(
+            arguments: [
+                "upload",
+                stagedURL.path
+            ]
+        ) { [weak self] code, output in
+            try? FileManager.default.removeItem(at: stagedURL)
+
+            guard let self else { return }
+
+            self.queueLastOutput = output
+
+            guard code == 0 else {
+                self.queueBusy = false
+                self.queueMessage = self.queueFailureMessage(
+                    output,
+                    fallback: "Queue upload failed."
+                )
+                NSSound.beep()
+                return
+            }
+
+            self.queueBusy = false
+            self.refreshQueue(
+                successMessage: "Uploaded \(sourceURL.lastPathComponent)."
+            )
+        }
+    }
+
+    func printNextQueueLabel() {
+        performQueueAction(
+            command: "print-next",
+            progress: "Printing next queued label…",
+            success: "Print Next completed."
+        )
+    }
+
+    func printAllQueueLabels() {
+        performQueueAction(
+            command: "print-all",
+            progress: "Printing all queued labels…",
+            success: "Print All completed."
+        )
+    }
+
+    func clearQueue() {
+        performQueueAction(
+            command: "clear",
+            progress: "Clearing queue…",
+            success: "Queue cleared."
+        )
+    }
+
+    func openMainWindow(
+        section: GX430TMainSection? = nil
+    ) {
+        if let section {
+            mainSection = section
+        }
+
         NSApp.activate(ignoringOtherApps: true)
+
         if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
             window.makeKeyAndOrderFront(nil)
         }
+    }
+
+    private func performQueueAction(
+        command: String,
+        progress: String,
+        success: String
+    ) {
+        guard !queueBusy else { return }
+
+        queueBusy = true
+        queueMessage = progress
+
+        execute(arguments: [command]) { [weak self] code, output in
+            guard let self else { return }
+
+            self.queueLastOutput = output
+
+            guard code == 0 else {
+                self.queueBusy = false
+                self.queueMessage = self.queueFailureMessage(
+                    output,
+                    fallback: "\(command) failed."
+                )
+                NSSound.beep()
+                return
+            }
+
+            self.queueBusy = false
+            self.refreshQueue(successMessage: success)
+        }
+    }
+
+    private func queueFailureMessage(
+        _ output: String,
+        fallback: String
+    ) -> String {
+        let clean = output.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
+        return clean.isEmpty ? fallback : clean
     }
 
     private func execute(
@@ -555,7 +795,6 @@ struct BarcodePreview: View {
 
 struct QuickPrintView: View {
     @EnvironmentObject private var model: GX430TModel
-    @State private var showingHistory = false
     @State private var showingConnection = false
 
     var body: some View {
@@ -586,14 +825,22 @@ struct QuickPrintView: View {
                 Divider()
 
                 Button {
-                    showingHistory = false
+                    model.mainSection = .quickPrint
                 } label: {
                     Label("Quick Print", systemImage: "bolt.fill")
                 }
                 .buttonStyle(.plain)
 
                 Button {
-                    showingHistory = true
+                    model.mainSection = .uploadQueue
+                    model.refreshQueue()
+                } label: {
+                    Label("Upload Queue", systemImage: "tray.and.arrow.up.fill")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    model.mainSection = .history
                 } label: {
                     Label("History", systemImage: "clock.arrow.circlepath")
                 }
@@ -626,10 +873,13 @@ struct QuickPrintView: View {
             .padding(22)
             .navigationSplitViewColumnWidth(min: 230, ideal: 250, max: 280)
         } detail: {
-            if showingHistory {
-                HistoryView()
-            } else {
+            switch model.mainSection {
+            case .quickPrint:
                 quickPrint
+            case .uploadQueue:
+                UploadQueueView()
+            case .history:
+                HistoryView()
             }
         }
         .frame(minWidth: 920, minHeight: 650)
@@ -639,18 +889,39 @@ struct QuickPrintView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    model.refreshStatus()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                if model.mainSection == .quickPrint {
+                    Button {
+                        model.refreshStatus()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        model.printCurrent()
+                    } label: {
+                        Label("Print", systemImage: "printer.fill")
+                    }
+                    .disabled(!model.canPrint)
                 }
 
-                Button {
-                    model.printCurrent()
-                } label: {
-                    Label("Print", systemImage: "printer.fill")
+                if model.mainSection == .uploadQueue {
+                    Button {
+                        model.refreshQueue()
+                    } label: {
+                        Label("Refresh Queue", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(model.queueBusy)
+
+                    Button {
+                        model.printNextQueueLabel()
+                    } label: {
+                        Label("Print Next", systemImage: "printer.fill")
+                    }
+                    .disabled(
+                        model.queueBusy ||
+                        (model.queueState?.counts.queued ?? 0) == 0
+                    )
                 }
-                .disabled(!model.canPrint)
             }
         }
     }
@@ -761,6 +1032,343 @@ struct QuickPrintView: View {
                 .padding(.top, 2)
             }
             .padding(30)
+        }
+    }
+}
+
+struct UploadQueueView: View {
+    @EnvironmentObject private var model: GX430TModel
+
+    @State private var showingImporter = false
+    @State private var confirmingClear = false
+
+    private var supportedTypes: [UTType] {
+        [
+            "csv",
+            "tsv",
+            "xlsx",
+            "ods",
+            "txt"
+        ].compactMap {
+            UTType(filenameExtension: $0)
+        }
+    }
+
+    private var jobs: [GX430TQueueJob] {
+        model.queueState?.jobs ?? []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Upload Queue")
+                        .font(.system(size: 34, weight: .bold))
+
+                    Text("Import ordered sheet files and control label delivery.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if model.queueBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    showingImporter = true
+                } label: {
+                    Label(
+                        "Choose Sheet File",
+                        systemImage: "doc.badge.plus"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.queueBusy)
+
+                Button {
+                    model.refreshQueue()
+                } label: {
+                    Label(
+                        "Refresh",
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+                .disabled(model.queueBusy)
+
+                Spacer()
+
+                Button {
+                    model.printNextQueueLabel()
+                } label: {
+                    Label(
+                        "Print Next",
+                        systemImage: "printer"
+                    )
+                }
+                .disabled(
+                    model.queueBusy ||
+                    (model.queueState?.counts.queued ?? 0) == 0
+                )
+
+                Button {
+                    model.printAllQueueLabels()
+                } label: {
+                    Label(
+                        "Print All",
+                        systemImage: "printer.fill"
+                    )
+                }
+                .disabled(
+                    model.queueBusy ||
+                    (model.queueState?.counts.queued ?? 0) == 0
+                )
+
+                Button(role: .destructive) {
+                    confirmingClear = true
+                } label: {
+                    Label(
+                        "Clear",
+                        systemImage: "trash"
+                    )
+                }
+                .disabled(model.queueBusy || jobs.isEmpty)
+            }
+
+            HStack(spacing: 12) {
+                queueSummaryCard(
+                    title: "Queued",
+                    count: model.queueState?.counts.queued ?? 0,
+                    symbol: "tray.full"
+                )
+
+                queueSummaryCard(
+                    title: "Printed",
+                    count: model.queueState?.counts.printed ?? 0,
+                    symbol: "checkmark.circle"
+                )
+
+                queueSummaryCard(
+                    title: "Errors",
+                    count: model.queueState?.counts.error ?? 0,
+                    symbol: "exclamationmark.triangle"
+                )
+            }
+
+            if jobs.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 44, weight: .regular))
+                        .foregroundStyle(.secondary)
+
+                    Text("Queue Empty")
+                        .font(.title2.weight(.semibold))
+
+                    Text("Choose a CSV, TSV, XLSX, ODS, or text file to create ordered label jobs.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: 440)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            } else {
+                List(jobs) { job in
+                    HStack(spacing: 14) {
+                        Image(
+                            systemName: statusSymbol(job.status)
+                        )
+                        .foregroundStyle(
+                            statusColor(job.status)
+                        )
+                        .frame(width: 22)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(job.barcode)
+                                .font(
+                                    .system(
+                                        .headline,
+                                        design: .monospaced
+                                    )
+                                )
+                                .lineLimit(1)
+
+                            if
+                                let title = job.title,
+                                !title.isEmpty,
+                                title != job.barcode
+                            {
+                                Text(title)
+                                    .font(.callout)
+                                    .lineLimit(1)
+                            }
+
+                            HStack(spacing: 6) {
+                                if let sourceFile = job.sourceFile {
+                                    Text(sourceFile)
+                                }
+
+                                if let sourceRow = job.sourceRow {
+                                    Text("row \(sourceRow)")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(job.status.capitalized)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(
+                                    statusColor(job.status)
+                                )
+
+                            Text("#\(job.id)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+                .listStyle(.inset)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(
+                    systemName: model.queueBusy
+                        ? "arrow.triangle.2.circlepath"
+                        : "info.circle"
+                )
+                .foregroundStyle(.secondary)
+
+                Text(model.queueMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Spacer()
+
+                Text("Port 43043 · Protocol 1")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .background(.quaternary.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .padding(30)
+        .fileImporter(
+            isPresented: $showingImporter,
+            allowedContentTypes: supportedTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else {
+                    model.queueMessage = "No file was selected."
+                    return
+                }
+
+                model.uploadQueueFile(url)
+
+            case .failure(let error):
+                model.queueMessage = "File selection failed: \(error.localizedDescription)"
+                NSSound.beep()
+            }
+        }
+        .confirmationDialog(
+            "Clear all queue jobs?",
+            isPresented: $confirmingClear,
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Clear Queue",
+                role: .destructive
+            ) {
+                model.clearQueue()
+            }
+
+            Button(
+                "Cancel",
+                role: .cancel
+            ) {}
+        } message: {
+            Text(
+                "Queued, printed, and failed queue records will be removed."
+            )
+        }
+        .onAppear {
+            model.refreshQueue()
+        }
+    }
+
+    private func queueSummaryCard(
+        title: String,
+        count: Int,
+        symbol: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(count)")
+                    .font(.title2.weight(.bold))
+                    .monospacedDigit()
+
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 14,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 14,
+                style: .continuous
+            )
+            .stroke(
+                .primary.opacity(0.08),
+                lineWidth: 1
+            )
+        }
+    }
+
+    private func statusSymbol(_ status: String) -> String {
+        switch status.lowercased() {
+        case "printed":
+            return "checkmark.circle.fill"
+        case "error":
+            return "exclamationmark.triangle.fill"
+        default:
+            return "tray.full.fill"
+        }
+    }
+
+    private func statusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "printed":
+            return .green
+        case "error":
+            return .red
+        default:
+            return .blue
         }
     }
 }
@@ -1048,6 +1656,75 @@ struct MenuBarContent: View {
                 }
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Upload Queue")
+                        .font(.headline)
+
+                    Spacer()
+
+                    if model.queueBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Button {
+                            model.refreshQueue()
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Refresh upload queue")
+                    }
+                }
+
+                HStack(spacing: 14) {
+                    Label(
+                        "\(model.queueState?.counts.queued ?? 0) queued",
+                        systemImage: "tray.full"
+                    )
+
+                    Label(
+                        "\(model.queueState?.counts.error ?? 0) errors",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                HStack {
+                    Button {
+                        model.openMainWindow(
+                            section: .uploadQueue
+                        )
+                    } label: {
+                        Label(
+                            "Open Queue",
+                            systemImage: "macwindow"
+                        )
+                    }
+
+                    Spacer()
+
+                    Button("Print Next") {
+                        model.printNextQueueLabel()
+                    }
+                    .disabled(
+                        model.queueBusy ||
+                        (model.queueState?.counts.queued ?? 0) == 0
+                    )
+
+                    Button("Print All") {
+                        model.printAllQueueLabels()
+                    }
+                    .disabled(
+                        model.queueBusy ||
+                        (model.queueState?.counts.queued ?? 0) == 0
+                    )
+                }
+            }
+
             if !model.message.isEmpty {
                 HStack(alignment: .top, spacing: 7) {
                     Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
@@ -1155,6 +1832,7 @@ struct MenuBarContent: View {
         .frame(width: 390)
         .onAppear {
             model.refreshStatus()
+            model.refreshQueue()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 inputFocused = true
             }
