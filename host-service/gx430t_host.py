@@ -5,6 +5,7 @@ import hashlib
 import secrets
 import uuid
 import csv
+import fcntl
 import html
 import io
 import json
@@ -34,6 +35,36 @@ PORT = int(
 )
 CLI = os.environ.get("GX430T_CLI", "/usr/local/bin/gx430tctl")
 PRINTER = "GX430t"
+
+QUEUE_COMPLETION_TIMEOUT_SECONDS = max(
+    30.0,
+    float(
+        os.environ.get(
+            "GX430T_QUEUE_COMPLETION_TIMEOUT_SECONDS",
+            "120",
+        )
+    ),
+)
+
+QUEUE_THERMAL_COOLDOWN_SECONDS = max(
+    0.0,
+    float(
+        os.environ.get(
+            "GX430T_QUEUE_THERMAL_COOLDOWN_SECONDS",
+            "4.0",
+        )
+    ),
+)
+
+QUEUE_STATUS_POLL_SECONDS = max(
+    0.1,
+    float(
+        os.environ.get(
+            "GX430T_QUEUE_STATUS_POLL_SECONDS",
+            "0.25",
+        )
+    ),
+)
 
 CONFIG = (
     Path.home()
@@ -893,11 +924,185 @@ def raw_submission_command(destination_uri, source_path):
     ]
 
 
+def destination_server(destination_uri):
+    parsed = urllib.parse.urlsplit(destination_uri)
+
+    if parsed.scheme.lower() not in {"ipp", "ipps"}:
+        return None
+
+    hostname = parsed.hostname or ""
+    port = parsed.port or 631
+
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+
+    return f"{hostname}:{port}"
+
+
+def submitted_job_id(message):
+    match = re.search(
+        rf"\b{re.escape(PRINTER)}-\d+\b",
+        str(message or ""),
+    )
+
+    return match.group(0) if match else ""
+
+
+def acquire_queue_print_lock():
+    lock_path = gx_home() / "queue-print.lock"
+    lock_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    handle = lock_path.open("a+")
+
+    fcntl.flock(
+        handle.fileno(),
+        fcntl.LOCK_EX,
+    )
+
+    return handle
+
+
+def release_queue_print_lock(handle):
+    try:
+        fcntl.flock(
+            handle.fileno(),
+            fcntl.LOCK_UN,
+        )
+    finally:
+        handle.close()
+
+
+def cancel_submitted_job(destination_uri, job_id):
+    command = ["/usr/bin/cancel"]
+    server = destination_server(destination_uri)
+
+    if server:
+        command.extend(
+            [
+                "-h",
+                server,
+            ]
+        )
+
+    command.append(job_id)
+
+    subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+
+def wait_for_submitted_job(destination_uri, message):
+    job_id = submitted_job_id(message)
+
+    if not job_id:
+        return (
+            False,
+            "GX430T submission did not return a valid job ID",
+        )
+
+    command = ["/usr/bin/lpstat"]
+    server = destination_server(destination_uri)
+
+    if server:
+        command.extend(
+            [
+                "-h",
+                server,
+            ]
+        )
+
+    command.extend(
+        [
+            "-W",
+            "not-completed",
+            "-o",
+            PRINTER,
+        ]
+    )
+
+    deadline = (
+        time.monotonic()
+        + QUEUE_COMPLETION_TIMEOUT_SECONDS
+    )
+
+    while True:
+        status = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        output = (
+            (status.stdout or "")
+            + "\n"
+            + (status.stderr or "")
+        )
+
+        if status.returncode not in (0, 1):
+            return (
+                False,
+                (
+                    "GX430T could not verify remote job completion: "
+                    + output.strip()
+                ),
+            )
+
+        if not re.search(
+            rf"^{re.escape(job_id)}(?:\s|$)",
+            output,
+            flags=re.MULTILINE,
+        ):
+            break
+
+        if time.monotonic() >= deadline:
+            cancel_submitted_job(
+                destination_uri,
+                job_id,
+            )
+
+            return (
+                False,
+                (
+                    "GX430T remote job timed out and was cancelled: "
+                    + job_id
+                ),
+            )
+
+        time.sleep(
+            QUEUE_STATUS_POLL_SECONDS
+        )
+
+    if QUEUE_THERMAL_COOLDOWN_SECONDS > 0:
+        time.sleep(
+            QUEUE_THERMAL_COOLDOWN_SECONDS
+        )
+
+    return (
+        True,
+        (
+            f"{job_id} completed; "
+            "thermal recovery "
+            f"{QUEUE_THERMAL_COOLDOWN_SECONDS:.1f}s"
+        ),
+    )
+
+
 def printer_cmd(zpl):
-    valid, detail = printer_destination_contract()
+    valid, destination_uri = (
+        printer_destination_contract()
+    )
 
     if not valid:
-        return False, detail
+        return False, destination_uri
 
     tmp = tempfile.NamedTemporaryFile(
         "w",
@@ -910,7 +1115,7 @@ def printer_cmd(zpl):
         tmp.close()
 
         command = raw_submission_command(
-            detail,
+            destination_uri,
             tmp.name,
         )
 
@@ -929,10 +1134,25 @@ def printer_cmd(zpl):
                 or "GX430T raw submission failed"
             ).strip()
 
-        return True, (
+        submission = (
             process.stdout
             or f"submitted raw data explicitly to {PRINTER}"
         ).strip()
+
+        completed, completion = (
+            wait_for_submitted_job(
+                destination_uri,
+                submission,
+            )
+        )
+
+        if not completed:
+            return False, completion
+
+        return (
+            True,
+            submission + "; " + completion,
+        )
     except Exception as error:
         return False, str(error)
     finally:
@@ -942,7 +1162,7 @@ def printer_cmd(zpl):
             pass
 
 
-def print_next(kind):
+def _print_next_locked(kind):
     kind = normalize_queue_print_kind(kind)
     con = connect()
 
@@ -961,6 +1181,7 @@ def print_next(kind):
             "ok": True,
             "printed": 0,
             "kind": kind,
+            "deliveryMode": "one-by-one",
             "message": "queue empty",
         }
 
@@ -993,6 +1214,7 @@ def print_next(kind):
             "id": row["id"],
             "barcode": row["barcode"],
             "kind": kind,
+            "deliveryMode": "one-by-one",
             "error": message,
         }
 
@@ -1020,6 +1242,10 @@ def print_next(kind):
                 "id": row["id"],
                 "barcode": row["barcode"],
                 "kind": kind,
+                "deliveryMode": "one-by-one",
+                "thermalCooldownSeconds": (
+                    QUEUE_THERMAL_COOLDOWN_SECONDS
+                ),
                 "message": message,
             }
 
@@ -1042,8 +1268,18 @@ def print_next(kind):
             "id": row["id"],
             "barcode": row["barcode"],
             "kind": kind,
+            "deliveryMode": "one-by-one",
             "error": message,
         }
+
+
+def print_next(kind):
+    lock = acquire_queue_print_lock()
+
+    try:
+        return _print_next_locked(kind)
+    finally:
+        release_queue_print_lock(lock)
 
 
 def print_all(kind):
@@ -1051,32 +1287,41 @@ def print_all(kind):
     printed = 0
     errors = []
 
-    while True:
-        con = connect()
+    lock = acquire_queue_print_lock()
 
-        remaining = con.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM jobs
-            WHERE status='queued'
-            """
-        ).fetchone()["count"]
+    try:
+        while True:
+            con = connect()
 
-        if remaining <= 0:
-            break
+            remaining = con.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM jobs
+                WHERE status='queued'
+                """
+            ).fetchone()["count"]
 
-        result = print_next(kind)
+            if remaining <= 0:
+                break
 
-        if result.get("printed"):
-            printed += 1
-        else:
-            errors.append(result)
-            break
+            result = _print_next_locked(kind)
+
+            if result.get("printed"):
+                printed += 1
+            else:
+                errors.append(result)
+                break
+    finally:
+        release_queue_print_lock(lock)
 
     return {
         "ok": len(errors) == 0,
         "printed": printed,
         "kind": kind,
+        "deliveryMode": "one-by-one",
+        "thermalCooldownSeconds": (
+            QUEUE_THERMAL_COOLDOWN_SECONDS
+        ),
         "errors": errors,
         "state": state(20),
     }
