@@ -97,7 +97,7 @@ public struct GX430TQueueCounts: Codable, Sendable {
 }
 
 public struct GX430TQueueJob: Codable, Identifiable, Sendable {
-    public let id: Int
+    public let rawID: Int?
     public let created: Double
     public let position: Double
     public let sourceFile: String?
@@ -108,8 +108,21 @@ public struct GX430TQueueJob: Codable, Identifiable, Sendable {
     public let printed: Double?
     public let lastError: String?
 
+    public var id: String {
+        if let rawID {
+            return "job-\(rawID)"
+        }
+
+        return [
+            sourceFile ?? "queue",
+            String(sourceRow ?? 0),
+            barcode,
+            String(position)
+        ].joined(separator: "|")
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id
+        case rawID = "id"
         case created
         case position
         case sourceFile = "source_file"
@@ -574,6 +587,17 @@ public actor GX430TNetworkClient {
         case 200..<300:
             return
         case 401:
+            if
+                let object = try? JSONSerialization.jsonObject(with: data),
+                let dictionary = object as? [String: Any],
+                let error = dictionary["error"] as? String,
+                error == "invalid_pairing_code"
+            {
+                throw GX430TClientError.server(
+                    "The pairing code is invalid or expired. Open Connection on the work Mac and use its current six-digit code."
+                )
+            }
+
             throw GX430TClientError.unauthorized
         default:
             if

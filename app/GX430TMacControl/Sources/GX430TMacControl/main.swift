@@ -56,7 +56,7 @@ struct GX430TQueueCounts: Codable {
 }
 
 struct GX430TQueueJob: Codable, Identifiable {
-    let id: Int
+    let rawID: Int?
     let created: Double
     let position: Double
     let sourceFile: String?
@@ -67,8 +67,21 @@ struct GX430TQueueJob: Codable, Identifiable {
     let printed: Double?
     let lastError: String?
 
+    var id: String {
+        if let rawID {
+            return "job-\(rawID)"
+        }
+
+        return [
+            sourceFile ?? "queue",
+            String(sourceRow ?? 0),
+            barcode,
+            String(position)
+        ].joined(separator: "|")
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id
+        case rawID = "id"
         case created
         case position
         case sourceFile = "source_file"
@@ -138,6 +151,9 @@ final class GX430TModel: ObservableObject {
     @Published var pairingCode = ""
     @Published var clientName = Host.current().localizedName ?? "GX430T Mac"
     @Published var isPairing = false
+    @Published var hostAddress = ""
+    @Published var hostPairingCode = ""
+    @Published var connectionMessageIsError = false
 
     @Published var mainSection: GX430TMainSection = .quickPrint
     @Published var queueState: GX430TQueueState?
@@ -171,6 +187,8 @@ final class GX430TModel: ObservableObject {
                 self.printerOnline = true
                 self.printerStatus = localPrinting ? "GX430t Printing" : "GX430t Online"
                 self.message = "Connected directly through this Mac."
+                self.connectionMessageIsError = false
+                self.refreshHostDetails()
                 return
             }
 
@@ -184,6 +202,7 @@ final class GX430TModel: ObservableObject {
                     self.printerOnline = true
                     self.printerStatus = "GX430t Online via Host"
                     self.message = "Connected securely to the GX430T Print Host."
+                    self.connectionMessageIsError = false
                 } else {
                     self.connectionMode = .unavailable
                     self.printerOnline = false
@@ -278,6 +297,34 @@ final class GX430TModel: ObservableObject {
         }
     }
 
+    func refreshHostDetails() {
+        execute(arguments: ["host-info"]) { [weak self] code, output in
+            guard let self else { return }
+
+            guard code == 0 else {
+                self.hostAddress = ""
+                self.hostPairingCode = ""
+                return
+            }
+
+            for line in output.split(whereSeparator: \.isNewline) {
+                let value = String(line)
+
+                if value.hasPrefix("GX430T_HOST_URL=") {
+                    self.hostAddress = String(
+                        value.dropFirst("GX430T_HOST_URL=".count)
+                    )
+                }
+
+                if value.hasPrefix("GX430T_PAIRING_CODE=") {
+                    self.hostPairingCode = String(
+                        value.dropFirst("GX430T_PAIRING_CODE=".count)
+                    )
+                }
+            }
+        }
+    }
+
     func pairWithHost(completion: @escaping (Bool) -> Void) {
         let cleanHost = hostURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanCode = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -285,17 +332,20 @@ final class GX430TModel: ObservableObject {
 
         guard !cleanHost.isEmpty else {
             message = "Enter the print-host address."
+            connectionMessageIsError = true
             completion(false)
             return
         }
 
         guard cleanCode.count == 6, cleanCode.allSatisfy({ $0.isNumber }) else {
-            message = "Enter the six-digit pairing code."
+            message = "Enter the current six-digit pairing code shown on the work Mac."
+            connectionMessageIsError = true
             completion(false)
             return
         }
 
         isPairing = true
+        connectionMessageIsError = false
         message = "Pairing with GX430T Print Host…"
 
         execute(arguments: ["client-pair", cleanHost, cleanCode, cleanName]) { [weak self] code, output in
@@ -306,11 +356,25 @@ final class GX430TModel: ObservableObject {
             if code == 0 && output.contains("GX430T_CLIENT_PAIRED=true") {
                 self.connectionMode = .remote
                 self.pairingCode = ""
+                self.connectionMessageIsError = false
                 self.message = "Mac paired successfully."
                 self.refreshStatus()
                 completion(true)
             } else {
-                self.message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.connectionMessageIsError = true
+
+                if output.contains("invalid_pairing_code") {
+                    self.message = "The pairing code is invalid or expired. Open Connection on the work Mac and use its current six-digit code."
+                } else {
+                    let cleanOutput = output.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+
+                    self.message = cleanOutput.isEmpty
+                        ? "Pairing failed. Confirm the host address and current six-digit code."
+                        : cleanOutput
+                }
+
                 NSSound.beep()
                 completion(false)
             }
@@ -1475,10 +1539,77 @@ struct ConnectionView: View {
                 )
                 .foregroundStyle(.green)
 
-                Text("Other Macs and iPhones can pair with this Mac and send secure print jobs over the local network.")
+                Text("Use these details on another Mac or iPhone. The pairing code rotates after every successful pairing.")
                     .foregroundStyle(.secondary)
 
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("HOST ADDRESS")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            model.hostAddress.isEmpty
+                                ? "Loading host address…"
+                                : model.hostAddress
+                        )
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    }
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("CURRENT PAIRING CODE")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Text(
+                                model.hostPairingCode.isEmpty
+                                    ? "------"
+                                    : model.hostPairingCode
+                            )
+                            .font(
+                                .system(
+                                    size: 30,
+                                    weight: .bold,
+                                    design: .monospaced
+                                )
+                            )
+                            .tracking(5)
+                            .textSelection(.enabled)
+
+                            Spacer()
+
+                            Button {
+                                let pasteboard = NSPasteboard.general
+                                pasteboard.clearContents()
+                                pasteboard.setString(
+                                    model.hostPairingCode,
+                                    forType: .string
+                                )
+                            } label: {
+                                Label("Copy Code", systemImage: "doc.on.doc")
+                            }
+                            .disabled(model.hostPairingCode.isEmpty)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(.regularMaterial)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                )
+
                 HStack {
+                    Button {
+                        model.refreshHostDetails()
+                    } label: {
+                        Label("Refresh Pairing Details", systemImage: "arrow.clockwise")
+                    }
+
                     Button {
                         model.enableAppAutostart()
                     } label: {
@@ -1488,7 +1619,7 @@ struct ConnectionView: View {
                     Button {
                         model.restartPrintHost()
                     } label: {
-                        Label("Restart Print Host", systemImage: "arrow.clockwise")
+                        Label("Restart Print Host", systemImage: "bolt.horizontal")
                     }
 
                     Spacer()
@@ -1545,19 +1676,44 @@ struct ConnectionView: View {
             Divider()
 
             HStack {
-                Image(systemName: model.printerOnline ? "checkmark.circle.fill" : "info.circle.fill")
-                    .foregroundStyle(model.printerOnline ? .green : .secondary)
+                Image(
+                    systemName: model.connectionMessageIsError
+                        ? "xmark.circle.fill"
+                        : (
+                            model.printerOnline
+                                ? "checkmark.circle.fill"
+                                : "info.circle.fill"
+                        )
+                )
+                .foregroundStyle(
+                    model.connectionMessageIsError
+                        ? .red
+                        : (
+                            model.printerOnline
+                                ? .green
+                                : .secondary
+                        )
+                )
 
                 Text(model.message)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(
+                        model.connectionMessageIsError
+                            ? .red
+                            : .secondary
+                    )
                     .textSelection(.enabled)
 
                 Spacer()
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 560)
+        .onAppear {
+            if model.connectionMode == .local {
+                model.refreshHostDetails()
+            }
+        }
     }
 }
 

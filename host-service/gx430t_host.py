@@ -67,9 +67,7 @@ def db_path():
     (h / "uploads").mkdir(parents=True, exist_ok=True)
     return h / "queue.sqlite3"
 
-def connect():
-    con = sqlite3.connect(str(db_path()))
-    con.row_factory = sqlite3.Row
+def create_jobs_table(con):
     con.execute("""
     CREATE TABLE IF NOT EXISTS jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,7 +83,252 @@ def connect():
       zpl TEXT NOT NULL
     )
     """)
-    con.commit()
+
+
+def safe_float(value, fallback):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(fallback)
+
+
+def safe_int(value, fallback=None):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def ensure_queue_schema(con):
+    information = con.execute(
+        "PRAGMA table_info(jobs)"
+    ).fetchall()
+
+    if not information:
+        create_jobs_table(con)
+        con.commit()
+        return
+
+    columns = {
+        str(row["name"]): row
+        for row in information
+    }
+
+    id_column = columns.get("id")
+
+    canonical = (
+        id_column is not None
+        and int(id_column["pk"] or 0) == 1
+        and "INT" in str(id_column["type"] or "").upper()
+        and {
+            "created",
+            "position",
+            "source_file",
+            "source_row",
+            "barcode",
+            "title",
+            "status",
+            "printed",
+            "last_error",
+            "zpl",
+        }.issubset(columns)
+    )
+
+    if canonical:
+        return
+
+    legacy_name = (
+        "jobs_legacy_"
+        + str(int(time.time() * 1000))
+    )
+
+    con.execute("BEGIN IMMEDIATE")
+
+    try:
+        con.execute(
+            f'ALTER TABLE jobs RENAME TO "{legacy_name}"'
+        )
+
+        create_jobs_table(con)
+
+        legacy_rows = con.execute(
+            f'SELECT * FROM "{legacy_name}"'
+        ).fetchall()
+
+        for index, row in enumerate(legacy_rows, start=1):
+            available = set(row.keys())
+
+            def value(*names):
+                for name in names:
+                    if name in available:
+                        candidate = row[name]
+
+                        if candidate is not None:
+                            return candidate
+
+                return None
+
+            barcode = nonempty(
+                value(
+                    "barcode",
+                    "code",
+                    "ean",
+                    "sku",
+                    "value",
+                )
+            )
+
+            if not barcode:
+                continue
+
+            title = nonempty(
+                value(
+                    "title",
+                    "name",
+                    "description",
+                    "label",
+                )
+            ) or barcode
+
+            created = safe_float(
+                value("created", "created_at", "timestamp"),
+                time.time(),
+            )
+
+            base_position = safe_float(
+                value(
+                    "position",
+                    "order",
+                    "sequence",
+                    "priority",
+                ),
+                index,
+            )
+
+            source_file = nonempty(
+                value(
+                    "source_file",
+                    "source",
+                    "filename",
+                    "file",
+                )
+            ) or None
+
+            source_row = safe_int(
+                value(
+                    "source_row",
+                    "row",
+                    "row_number",
+                )
+            )
+
+            status = nonempty(
+                value("status")
+            ).lower() or "queued"
+
+            if status not in {
+                "queued",
+                "printed",
+                "error",
+            }:
+                status = "queued"
+
+            printed_value = value(
+                "printed",
+                "printed_at",
+            )
+
+            printed = None
+
+            if printed_value not in {
+                None,
+                "",
+                0,
+                0.0,
+                "0",
+                "0.0",
+            }:
+                printed = safe_float(
+                    printed_value,
+                    time.time(),
+                )
+
+            last_error = nonempty(
+                value(
+                    "last_error",
+                    "error",
+                )
+            ) or None
+
+            existing_zpl = nonempty(
+                value("zpl")
+            )
+
+            quantity = safe_int(
+                value(
+                    "qty",
+                    "quantity",
+                    "copies",
+                ),
+                1,
+            )
+
+            quantity = max(
+                1,
+                min(quantity or 1, 999),
+            )
+
+            for copy_index in range(quantity):
+                position = (
+                    base_position
+                    + copy_index * 0.0001
+                )
+
+                con.execute(
+                    """
+                    INSERT INTO jobs(
+                      created,
+                      position,
+                      source_file,
+                      source_row,
+                      barcode,
+                      title,
+                      status,
+                      printed,
+                      last_error,
+                      zpl
+                    )
+                    VALUES(?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        created,
+                        position,
+                        source_file,
+                        source_row,
+                        barcode,
+                        title,
+                        status,
+                        printed,
+                        last_error,
+                        existing_zpl
+                        or zpl_for(barcode, title),
+                    ),
+                )
+
+        con.execute(
+            f'DROP TABLE "{legacy_name}"'
+        )
+
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+
+
+def connect():
+    con = sqlite3.connect(str(db_path()))
+    con.row_factory = sqlite3.Row
+    ensure_queue_schema(con)
     return con
 
 def clean_key(x):
