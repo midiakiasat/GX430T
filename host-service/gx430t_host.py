@@ -33,6 +33,7 @@ PORT = int(
     )
 )
 CLI = os.environ.get("GX430T_CLI", "/usr/local/bin/gx430tctl")
+PRINTER = "GX430t"
 
 CONFIG = (
     Path.home()
@@ -617,17 +618,150 @@ def clear():
         con.execute("DELETE FROM jobs")
     return {"ok": True, "cleared": True}
 
+def printer_destination_contract():
+    status = subprocess.run(
+        [
+            "/usr/bin/lpstat",
+            "-p",
+            PRINTER,
+            "-l",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    if status.returncode != 0:
+        return False, (
+            status.stderr
+            or status.stdout
+            or "GX430T CUPS destination is not configured"
+        ).strip()
+
+    status_text = (
+        (status.stdout or "")
+        + "\n"
+        + (status.stderr or "")
+    ).lower()
+
+    if any(
+        marker in status_text
+        for marker in (
+            "offline",
+            "disabled",
+            "not accepting",
+        )
+    ):
+        return (
+            False,
+            "GX430T destination is offline or unavailable",
+        )
+
+    destination = subprocess.run(
+        [
+            "/usr/bin/lpstat",
+            "-v",
+            PRINTER,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    if destination.returncode != 0:
+        return False, (
+            destination.stderr
+            or destination.stdout
+            or "GX430T device URI is unavailable"
+        ).strip()
+
+    destination_uri = ""
+    prefix = f"device for {PRINTER}:"
+
+    for line in (destination.stdout or "").splitlines():
+        if line.lower().startswith(prefix.lower()):
+            destination_uri = line.split(":", 1)[1].strip()
+            break
+
+    if not destination_uri:
+        return (
+            False,
+            "GX430T device URI could not be resolved",
+        )
+
+    decoded_uri = urllib.parse.unquote(
+        destination_uri
+    ).lower()
+
+    allowed = (
+        "gx430t",
+        "zebra",
+        "ztc",
+        "/printers/gx430t",
+    )
+
+    if not any(
+        marker in decoded_uri
+        for marker in allowed
+    ):
+        return (
+            False,
+            (
+                "GX430T print routing blocked. "
+                "Rejected destination: "
+                + destination_uri
+            ),
+        )
+
+    return True, destination_uri
+
+
 def printer_cmd(zpl):
-    tmp = tempfile.NamedTemporaryFile("w", delete=False, suffix=".zpl")
+    valid, detail = printer_destination_contract()
+
+    if not valid:
+        return False, detail
+
+    tmp = tempfile.NamedTemporaryFile(
+        "w",
+        delete=False,
+        suffix=".zpl",
+    )
+
     try:
         tmp.write(zpl)
         tmp.close()
-        p = subprocess.run(["/usr/bin/lp", "-o", "raw", tmp.name], capture_output=True, text=True, timeout=20)
-        if p.returncode != 0:
-            return False, (p.stderr or p.stdout or "lp failed").strip()
-        return True, (p.stdout or "printed").strip()
-    except Exception as e:
-        return False, str(e)
+
+        process = subprocess.run(
+            [
+                "/usr/bin/lp",
+                "-d",
+                PRINTER,
+                "-o",
+                "raw",
+                tmp.name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+
+        if process.returncode != 0:
+            return False, (
+                process.stderr
+                or process.stdout
+                or "GX430T lp submission failed"
+            ).strip()
+
+        return True, (
+            process.stdout
+            or f"submitted explicitly to {PRINTER}"
+        ).strip()
+    except Exception as error:
+        return False, str(error)
     finally:
         try:
             os.unlink(tmp.name)

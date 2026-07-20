@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PRINTER="${GX430T_PRINTER:-GX430t}"
+PRINTER="GX430t"
 MODEL="${GX430T_MODEL:-drv:///sample.drv/zebra.ppd}"
 KNOWN_URI="usb://Zebra%20Technologies/ZTC%20GX430t?serial=32J165201685"
 
@@ -25,7 +25,7 @@ fi
 echo "GX430T_USB_URI=$USB_URI"
 
 sudo lpadmin -p "$PRINTER" -E -v "$USB_URI" -m "$MODEL"
-sudo lpoptions -d "$PRINTER"
+echo "GX430T_SYSTEM_DEFAULT_PRINTER_UNCHANGED=true"
 
 lpstat -p "$PRINTER" -l
 echo "GX430T_LOCAL_CUPS_INSTALL_DONE=true"

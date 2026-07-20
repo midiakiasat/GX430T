@@ -2,7 +2,7 @@
 set -euo pipefail
 
 HOST_IP="${1:-}"
-CLIENT_PRINTER="${GX430T_CLIENT_PRINTER:-GX430t_shared}"
+CLIENT_PRINTER="GX430t"
 MODEL="${GX430T_MODEL:-drv:///sample.drv/zebra.ppd}"
 
 if [[ -z "$HOST_IP" ]]; then

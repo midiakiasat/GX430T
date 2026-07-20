@@ -34,3 +34,12 @@ release/GX430T-Colleague-Presentation-*.zip.sha256
 # Python cache artifacts
 __pycache__/
 *.py[cod]
+
+# Current GX430T generated product and internal distribution artifacts
+app/GX430TMacControl/build/
+installer/pkgroot/
+release/GX430T-Mac-Control-*.pkg
+release/GX430T-Mac-Control-*.pkg.sha256
+release/GX430T-Internal-Colleague-Kit-*/
+release/GX430T-Internal-Colleague-Kit-*.zip
+release/GX430T-Internal-Colleague-Kit-*.zip.sha256
