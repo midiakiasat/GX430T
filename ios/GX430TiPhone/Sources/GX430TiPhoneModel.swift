@@ -23,6 +23,7 @@ final class GX430TiPhoneModel: ObservableObject {
     @Published var queueState: GX430TQueueState?
     @Published var queueMessage = "Pair this iPhone to use the queue."
     @Published var queueBusy = false
+    @Published var queueKind: GX430TPrintKind = .code128
 
     private let client = GX430TNetworkClient()
     private let connectionKey = "GX430TStoredConnection"
@@ -220,12 +221,13 @@ final class GX430TiPhoneModel: ObservableObject {
         guard !queueBusy else { return }
 
         queueBusy = true
-        queueMessage = "Printing next queued label…"
+        queueMessage = "Printing next queued \(queueKind.title) label…"
         defer { queueBusy = false }
 
         do {
             let response = try await client.printNextQueueLabel(
-                connection: connection
+                connection: connection,
+                kind: queueKind
             )
 
             queueState = try await client.queueState(
@@ -259,12 +261,13 @@ final class GX430TiPhoneModel: ObservableObject {
         guard !queueBusy else { return }
 
         queueBusy = true
-        queueMessage = "Printing all queued labels…"
+        queueMessage = "Printing all queued labels as \(queueKind.title)…"
         defer { queueBusy = false }
 
         do {
             let response = try await client.printAllQueueLabels(
-                connection: connection
+                connection: connection,
+                kind: queueKind
             )
 
             if let responseState = response.state {

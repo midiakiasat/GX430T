@@ -501,20 +501,24 @@ public actor GX430TNetworkClient {
     }
 
     public func printNextQueueLabel(
-        connection: GX430TStoredConnection
+        connection: GX430TStoredConnection,
+        kind: GX430TPrintKind
     ) async throws -> GX430TQueueActionResponse {
         try await queueAction(
             connection: connection,
-            path: "api/print-next"
+            path: "api/print-next",
+            kind: kind
         )
     }
 
     public func printAllQueueLabels(
-        connection: GX430TStoredConnection
+        connection: GX430TStoredConnection,
+        kind: GX430TPrintKind
     ) async throws -> GX430TQueueActionResponse {
         try await queueAction(
             connection: connection,
-            path: "api/print-all"
+            path: "api/print-all",
+            kind: kind
         )
     }
 
@@ -529,13 +533,24 @@ public actor GX430TNetworkClient {
 
     private func queueAction(
         connection: GX430TStoredConnection,
-        path: String
+        path: String,
+        kind: GX430TPrintKind? = nil
     ) async throws -> GX430TQueueActionResponse {
         var request = URLRequest(
             url: connection.hostURL.appending(path: path)
         )
 
         request.httpMethod = "POST"
+
+        if let kind {
+            request.setValue(
+                "application/json",
+                forHTTPHeaderField: "Content-Type"
+            )
+            request.httpBody = try encoder.encode(
+                ["kind": kind.rawValue]
+            )
+        }
 
         authorize(
             request: &request,

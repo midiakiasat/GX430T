@@ -84,8 +84,8 @@ gx430tctl open
 gx430tctl upload <csv|tsv|xlsx|ods|txt>
 gx430tctl queue-status
 gx430tctl queue-state
-gx430tctl print-next
-gx430tctl print-all
+gx430tctl print-next <text|code128|code39|qr>
+gx430tctl print-all <text|code128|code39|qr>
 gx430tctl clear
 gx430tctl health
 USAGE
@@ -515,7 +515,31 @@ PY_HOST_SECRET
       "$QUEUE_HOST" \
       status
     ;;
-  print-next|print-all|clear)
+  print-next|print-all)
+    shift
+    require_queue_backend
+
+    KIND="${1:-}"
+
+    case "$KIND" in
+      text|code128|code39|qr)
+        ;;
+      *)
+        echo "usage: gx430tctl $CMD <text|code128|code39|qr>" >&2
+        exit 64
+        ;;
+    esac
+
+    cd "$ROOT"
+    exec env \
+      GX430T_PORT="$HOST_PORT" \
+      GX430T_HOST_PORT="$HOST_PORT" \
+      "$PYTHON" \
+      "$QUEUE_HOST" \
+      "$CMD" \
+      "$KIND"
+    ;;
+  clear)
     require_queue_backend
     cd "$ROOT"
     exec env \
@@ -523,7 +547,7 @@ PY_HOST_SECRET
       GX430T_HOST_PORT="$HOST_PORT" \
       "$PYTHON" \
       "$QUEUE_HOST" \
-      "$CMD"
+      clear
     ;;
   health)
     curl \

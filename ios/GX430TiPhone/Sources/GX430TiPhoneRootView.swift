@@ -642,6 +642,28 @@ struct GX430TiPhoneUploadQueueView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Queue label format")
+                    .font(.subheadline.weight(.semibold))
+
+                Picker(
+                    "Queue label format",
+                    selection: $model.queueKind
+                ) {
+                    ForEach(GX430TPrintKind.allCases) { kind in
+                        Text(kind.title)
+                            .tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(
+                    "Choose how every queued value is encoded before Print Next or Print All."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
             Button {
                 showingImporter = true
             } label: {

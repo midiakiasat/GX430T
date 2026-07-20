@@ -6,7 +6,9 @@ COPIES="${2:-1}"
 PRINTER="GX430t"
 
 LPSTAT="${GX430T_LPSTAT:-/usr/bin/lpstat}"
-LPR="${GX430T_LPR:-/usr/bin/lpr}"
+LP="${GX430T_LP:-/usr/bin/lp}"
+PYTHON="${GX430T_PYTHON:-/usr/bin/python3}"
+GX430T_DEVICE_URI=""
 
 gx430t_require_printer_destination() {
   local device_uri
@@ -43,6 +45,44 @@ gx430t_require_printer_destination() {
     printf '%s\n' "$printer_status" >&2
     exit 69
   fi
+
+  if printf '%s\n' "$device_uri" |
+    grep -Eiq '^dnssd://'
+  then
+    echo "GX430T_DNSSD_RAW_ROUTE_BLOCKED=true" >&2
+    exit 69
+  fi
+
+  GX430T_DEVICE_URI="$device_uri"
+}
+
+gx430t_submit_raw() {
+  local source_path="$1"
+  local remote_server=""
+
+  if printf '%s\n' "$GX430T_DEVICE_URI" |
+    grep -Eiq '^ipps?://'
+  then
+    remote_server="$(
+      "$PYTHON" - "$GX430T_DEVICE_URI" <<'PY_URI'
+import sys
+import urllib.parse
+
+parsed = urllib.parse.urlsplit(sys.argv[1])
+host = parsed.hostname or ""
+port = parsed.port or 631
+
+if ":" in host and not host.startswith("["):
+    host = f"[{host}]"
+
+print(f"{host}:{port}")
+PY_URI
+    )"
+
+    "$LP"       -h "$remote_server"       -d "$PRINTER"       -o raw       "$source_path"
+  else
+    "$LP"       -d "$PRINTER"       -o raw       "$source_path"
+  fi
 }
 OUT="${GX430T_ZPL_OUT:-/tmp/gx430t-code39.zpl}"
 
@@ -66,5 +106,5 @@ cat > "$OUT" <<ZPL
 ZPL
 
 gx430t_require_printer_destination
-"$LPR" -P "$PRINTER" -l "$OUT"
+gx430t_submit_raw "$OUT"
 echo "GX430T_CODE39_PRINT_SENT=true"

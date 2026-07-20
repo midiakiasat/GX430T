@@ -618,6 +618,116 @@ def clear():
         con.execute("DELETE FROM jobs")
     return {"ok": True, "cleared": True}
 
+QUEUE_PRINT_KINDS = {
+    "text",
+    "code128",
+    "code39",
+    "qr",
+}
+
+
+def normalize_queue_print_kind(kind):
+    value = str(kind or "").strip().lower()
+
+    if value not in QUEUE_PRINT_KINDS:
+        raise ValueError(
+            "queue print format must be text, code128, code39, or qr"
+        )
+
+    return value
+
+
+def queue_zpl_safe(value):
+    return (
+        str(value or "")
+        .replace("^", " ")
+        .replace("~", " ")
+        .replace("\x00", "")
+        .strip()
+    )
+
+
+def queue_zpl_for(kind, barcode, title=""):
+    kind = normalize_queue_print_kind(kind)
+    barcode = queue_zpl_safe(barcode)
+    title = queue_zpl_safe(title) or barcode
+
+    if not barcode:
+        raise ValueError("queued label value is empty")
+
+    if kind == "text":
+        return (
+            "^XA\n"
+            "^PW812\n"
+            "^LL600\n"
+            "^PR2\n"
+            "^MD20\n"
+            "^CI28\n"
+            "^FO60,120\n"
+            "^A0N,72,72\n"
+            "^FB692,5,10,C,0\n"
+            f"^FD{title}^FS\n"
+            "^PQ1\n"
+            "^XZ\n"
+        )
+
+    if kind == "code128":
+        return (
+            "^XA\n"
+            "^PW812\n"
+            "^LL600\n"
+            "^PR2\n"
+            "^MD20\n"
+            "^CI28\n"
+            "^FO80,90\n"
+            "^BY4,3,230\n"
+            "^BCN,230,Y,N,N\n"
+            f"^FD{barcode}^FS\n"
+            "^PQ1\n"
+            "^XZ\n"
+        )
+
+    if kind == "code39":
+        value = barcode.upper()
+        allowed = set(
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%"
+        )
+
+        if any(character not in allowed for character in value):
+            raise ValueError(
+                "Code 39 value contains unsupported characters"
+            )
+
+        return (
+            "^XA\n"
+            "^PW812\n"
+            "^LL600\n"
+            "^PR2\n"
+            "^MD20\n"
+            "^CI28\n"
+            "^FO80,90\n"
+            "^BY4,3,230\n"
+            "^B3N,N,230,Y,N\n"
+            f"^FD{value}^FS\n"
+            "^PQ1\n"
+            "^XZ\n"
+        )
+
+    return (
+        "^XA\n"
+        "^PW812\n"
+        "^LL600\n"
+        "^PR2\n"
+        "^MD20\n"
+        "^CI28\n"
+        "^FO100,80\n"
+        "^BQN,2,8\n"
+        f"^FDLA,{barcode}^FS\n"
+        "^PQ1\n"
+        "^XZ\n"
+    )
+
+
 def printer_destination_contract():
     status = subprocess.run(
         [
@@ -695,16 +805,14 @@ def printer_destination_contract():
         destination_uri
     ).lower()
 
-    allowed = (
-        "gx430t",
-        "zebra",
-        "ztc",
-        "/printers/gx430t",
-    )
-
     if not any(
         marker in decoded_uri
-        for marker in allowed
+        for marker in (
+            "gx430t",
+            "zebra",
+            "ztc",
+            "/printers/gx430t",
+        )
     ):
         return (
             False,
@@ -715,7 +823,74 @@ def printer_destination_contract():
             ),
         )
 
+    parsed = urllib.parse.urlsplit(destination_uri)
+
+    if parsed.scheme.lower() == "dnssd":
+        return (
+            False,
+            (
+                "GX430T raw delivery requires a direct "
+                "ipp:// or usb:// destination"
+            ),
+        )
+
+    if parsed.scheme.lower() in {"ipp", "ipps"}:
+        if (
+            not parsed.hostname
+            or not parsed.path.lower().endswith(
+                "/printers/gx430t"
+            )
+        ):
+            return (
+                False,
+                (
+                    "GX430T direct IPP routing blocked. "
+                    "Rejected destination: "
+                    + destination_uri
+                ),
+            )
+
+    elif parsed.scheme.lower() != "usb":
+        return (
+            False,
+            (
+                "GX430T unsupported destination scheme: "
+                + parsed.scheme
+            ),
+        )
+
     return True, destination_uri
+
+
+def raw_submission_command(destination_uri, source_path):
+    parsed = urllib.parse.urlsplit(destination_uri)
+
+    if parsed.scheme.lower() in {"ipp", "ipps"}:
+        hostname = parsed.hostname or ""
+        port = parsed.port or 631
+
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+
+        return [
+            "/usr/bin/lp",
+            "-h",
+            f"{hostname}:{port}",
+            "-d",
+            PRINTER,
+            "-o",
+            "raw",
+            source_path,
+        ]
+
+    return [
+        "/usr/bin/lp",
+        "-d",
+        PRINTER,
+        "-o",
+        "raw",
+        source_path,
+    ]
 
 
 def printer_cmd(zpl):
@@ -734,15 +909,13 @@ def printer_cmd(zpl):
         tmp.write(zpl)
         tmp.close()
 
+        command = raw_submission_command(
+            detail,
+            tmp.name,
+        )
+
         process = subprocess.run(
-            [
-                "/usr/bin/lp",
-                "-d",
-                PRINTER,
-                "-o",
-                "raw",
-                tmp.name,
-            ],
+            command,
             capture_output=True,
             text=True,
             timeout=20,
@@ -753,12 +926,12 @@ def printer_cmd(zpl):
             return False, (
                 process.stderr
                 or process.stdout
-                or "GX430T lp submission failed"
+                or "GX430T raw submission failed"
             ).strip()
 
         return True, (
             process.stdout
-            or f"submitted explicitly to {PRINTER}"
+            or f"submitted raw data explicitly to {PRINTER}"
         ).strip()
     except Exception as error:
         return False, str(error)
@@ -768,34 +941,146 @@ def printer_cmd(zpl):
         except Exception:
             pass
 
-def print_next():
+
+def print_next(kind):
+    kind = normalize_queue_print_kind(kind)
     con = connect()
-    r = con.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY position, id LIMIT 1").fetchone()
-    if not r:
-        return {"ok": True, "printed": 0, "message": "queue empty"}
-    ok, msg = printer_cmd(r["zpl"])
+
+    row = con.execute(
+        """
+        SELECT *
+        FROM jobs
+        WHERE status='queued'
+        ORDER BY position, id
+        LIMIT 1
+        """
+    ).fetchone()
+
+    if not row:
+        return {
+            "ok": True,
+            "printed": 0,
+            "kind": kind,
+            "message": "queue empty",
+        }
+
+    try:
+        zpl = queue_zpl_for(
+            kind,
+            row["barcode"],
+            row["title"],
+        )
+    except Exception as error:
+        message = str(error)
+
+        with con:
+            con.execute(
+                """
+                UPDATE jobs
+                SET status='error',
+                    last_error=?
+                WHERE id=?
+                """,
+                (
+                    message,
+                    row["id"],
+                ),
+            )
+
+        return {
+            "ok": False,
+            "printed": 0,
+            "id": row["id"],
+            "barcode": row["barcode"],
+            "kind": kind,
+            "error": message,
+        }
+
+    ok, message = printer_cmd(zpl)
+
     with con:
         if ok:
-            con.execute("UPDATE jobs SET status='printed', printed=?, last_error=NULL WHERE id=?", (time.time(), r["id"]))
-            return {"ok": True, "printed": 1, "id": r["id"], "barcode": r["barcode"], "message": msg}
-        con.execute("UPDATE jobs SET status='error', last_error=? WHERE id=?", (msg, r["id"]))
-        return {"ok": False, "printed": 0, "id": r["id"], "barcode": r["barcode"], "error": msg}
+            con.execute(
+                """
+                UPDATE jobs
+                SET status='printed',
+                    printed=?,
+                    last_error=NULL
+                WHERE id=?
+                """,
+                (
+                    time.time(),
+                    row["id"],
+                ),
+            )
 
-def print_all():
+            return {
+                "ok": True,
+                "printed": 1,
+                "id": row["id"],
+                "barcode": row["barcode"],
+                "kind": kind,
+                "message": message,
+            }
+
+        con.execute(
+            """
+            UPDATE jobs
+            SET status='error',
+                last_error=?
+            WHERE id=?
+            """,
+            (
+                message,
+                row["id"],
+            ),
+        )
+
+        return {
+            "ok": False,
+            "printed": 0,
+            "id": row["id"],
+            "barcode": row["barcode"],
+            "kind": kind,
+            "error": message,
+        }
+
+
+def print_all(kind):
+    kind = normalize_queue_print_kind(kind)
     printed = 0
     errors = []
+
     while True:
         con = connect()
-        remaining = con.execute("SELECT COUNT(*) c FROM jobs WHERE status='queued'").fetchone()["c"]
+
+        remaining = con.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM jobs
+            WHERE status='queued'
+            """
+        ).fetchone()["count"]
+
         if remaining <= 0:
             break
-        res = print_next()
-        if res.get("printed"):
+
+        result = print_next(kind)
+
+        if result.get("printed"):
             printed += 1
         else:
-            errors.append(res)
+            errors.append(result)
             break
-    return {"ok": len(errors) == 0, "printed": printed, "errors": errors, "state": state(20)}
+
+    return {
+        "ok": len(errors) == 0,
+        "printed": printed,
+        "kind": kind,
+        "errors": errors,
+        "state": state(20),
+    }
+
 
 def save_upload_bytes(filename, data):
     filename = Path(filename or "upload.csv").name
@@ -1624,17 +1909,71 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/print-next":
-                self.send_json(
-                    200,
-                    print_next(),
-                )
+                try:
+                    length = int(
+                        self.headers.get(
+                            "Content-Length",
+                            "0",
+                        )
+                    )
+                    payload = (
+                        self.read_body()
+                        if length > 0
+                        else {}
+                    )
+                    kind = normalize_queue_print_kind(
+                        payload.get(
+                            "kind",
+                            "code128",
+                        )
+                    )
+                    result = print_next(kind)
+                    self.send_json(
+                        200 if result.get("ok") else 400,
+                        result,
+                    )
+                except Exception as exc:
+                    self.send_json(
+                        400,
+                        {
+                            "ok": False,
+                            "error": str(exc),
+                        },
+                    )
                 return
 
             if path == "/api/print-all":
-                self.send_json(
-                    200,
-                    print_all(),
-                )
+                try:
+                    length = int(
+                        self.headers.get(
+                            "Content-Length",
+                            "0",
+                        )
+                    )
+                    payload = (
+                        self.read_body()
+                        if length > 0
+                        else {}
+                    )
+                    kind = normalize_queue_print_kind(
+                        payload.get(
+                            "kind",
+                            "code128",
+                        )
+                    )
+                    result = print_all(kind)
+                    self.send_json(
+                        200 if result.get("ok") else 400,
+                        result,
+                    )
+                except Exception as exc:
+                    self.send_json(
+                        400,
+                        {
+                            "ok": False,
+                            "error": str(exc),
+                        },
+                    )
                 return
 
             if path == "/api/clear":
@@ -1684,8 +2023,23 @@ def main() -> int:
     upload_parser.add_argument("file")
 
     subparsers.add_parser("status")
-    subparsers.add_parser("print-next")
-    subparsers.add_parser("print-all")
+
+    print_next_parser = subparsers.add_parser(
+        "print-next"
+    )
+    print_next_parser.add_argument(
+        "kind",
+        choices=sorted(QUEUE_PRINT_KINDS),
+    )
+
+    print_all_parser = subparsers.add_parser(
+        "print-all"
+    )
+    print_all_parser.add_argument(
+        "kind",
+        choices=sorted(QUEUE_PRINT_KINDS),
+    )
+
     subparsers.add_parser("clear")
 
     args = parser.parse_args()
@@ -1815,7 +2169,7 @@ def main() -> int:
     if args.cmd == "print-next":
         print(
             json.dumps(
-                print_next(),
+                print_next(args.kind),
                 indent=2,
                 ensure_ascii=False,
             )
@@ -1825,7 +2179,7 @@ def main() -> int:
     if args.cmd == "print-all":
         print(
             json.dumps(
-                print_all(),
+                print_all(args.kind),
                 indent=2,
                 ensure_ascii=False,
             )

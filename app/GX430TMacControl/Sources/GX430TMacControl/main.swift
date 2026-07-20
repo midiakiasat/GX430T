@@ -109,6 +109,15 @@ enum PrintKind: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    var apiValue: String {
+        switch self {
+        case .text: return "text"
+        case .code128: return "code128"
+        case .code39: return "code39"
+        case .qr: return "qr"
+        }
+    }
+
     var command: String {
         switch self {
         case .text: return "print-text"
@@ -160,6 +169,7 @@ final class GX430TModel: ObservableObject {
     @Published var queueMessage = "Queue ready."
     @Published var queueLastOutput = ""
     @Published var queueBusy = false
+    @Published var queueKind: PrintKind = .code128
 
     private let historyKey = "GX430TPrintHistory"
     private let cli = "/usr/local/bin/gx430tctl"
@@ -565,16 +575,18 @@ final class GX430TModel: ObservableObject {
     func printNextQueueLabel() {
         performQueueAction(
             command: "print-next",
-            progress: "Printing next queued label…",
-            success: "Print Next completed."
+            arguments: [queueKind.apiValue],
+            progress: "Printing next queued \(queueKind.rawValue) label…",
+            success: "Printed next queue item as \(queueKind.rawValue)."
         )
     }
 
     func printAllQueueLabels() {
         performQueueAction(
             command: "print-all",
-            progress: "Printing all queued labels…",
-            success: "Print All completed."
+            arguments: [queueKind.apiValue],
+            progress: "Printing all queued items as \(queueKind.rawValue)…",
+            success: "Printed queue as \(queueKind.rawValue)."
         )
     }
 
@@ -602,6 +614,7 @@ final class GX430TModel: ObservableObject {
 
     private func performQueueAction(
         command: String,
+        arguments: [String] = [],
         progress: String,
         success: String
     ) {
@@ -610,7 +623,7 @@ final class GX430TModel: ObservableObject {
         queueBusy = true
         queueMessage = progress
 
-        execute(arguments: [command]) { [weak self] code, output in
+        execute(arguments: [command] + arguments) { [weak self] code, output in
             guard let self else { return }
 
             self.queueLastOutput = output
@@ -1139,6 +1152,49 @@ struct UploadQueueView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    Text("QUEUE LABEL FORMAT")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.9)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("Required before printing")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
+                GX430TFormatSelector(
+                    selection: $model.queueKind
+                )
+
+                Text(
+                    "Every queued value will be encoded using the selected format. The sheet controls values, quantities, and order; this selector controls the physical label type."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(15)
+            .background(.regularMaterial)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 16,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 16,
+                    style: .continuous
+                )
+                .stroke(
+                    .primary.opacity(0.09),
+                    lineWidth: 1
+                )
             }
 
             HStack(spacing: 10) {
