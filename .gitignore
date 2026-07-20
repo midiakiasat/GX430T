@@ -30,3 +30,7 @@ release/GX430T-Colleague-Kit-*.zip.sha256
 release/GX430T-Colleague-Presentation-*/
 release/GX430T-Colleague-Presentation-*.zip
 release/GX430T-Colleague-Presentation-*.zip.sha256
+
+# Python cache artifacts
+__pycache__/
+*.py[cod]
