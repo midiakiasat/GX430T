@@ -17,6 +17,10 @@ let package = Package(
     targets: [
         .target(
             name: "GX430TKit"
+        ),
+        .testTarget(
+            name: "GX430TKitTests",
+            dependencies: ["GX430TKit"]
         )
     ]
 )

@@ -2,7 +2,7 @@
 
 - Version: 0.3.3
 - Build: 33
-- Commit: a0c49667e88c6eab91c9e1c9fb9166ac45760da4
+- Source authority: current main branch; see `evidence/release/full-readiness-v0.3.3.json`
 - Mac app: required
 - Menu bar: required
 - Host: port 43043
